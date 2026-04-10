@@ -70,7 +70,7 @@ export default function Home() {
       });
       const data = await res.json();
       const reply =
-        data.reply || "Error al obtener respuesta. Intenta de nuevo.";
+        data.reply || data.error || "Error al obtener respuesta. Intenta de nuevo.";
       setMessages([...msgs, { role: "assistant", content: reply }]);
     } catch {
       setMessages([

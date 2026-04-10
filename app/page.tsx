@@ -136,7 +136,7 @@ export default function Home() {
   const diaActual = selectedInfo?.fecha_inicio ? diasDesde(selectedInfo.fecha_inicio.split("T")[0]) : null;
   const activeComposteras = composteras.filter((c) => c.activa);
 
-  async function saveMedicion(estado: string) {
+  async function saveMedicion(estado: string): Promise<boolean> {
     try {
       const res = await fetch("/api/mediciones", {
         method: "POST",
@@ -148,10 +148,13 @@ export default function Home() {
         }),
       });
       setSaveStatus(res.ok ? "ok" : "error");
+      setTimeout(() => setSaveStatus(""), 3000);
+      return res.ok;
     } catch {
       setSaveStatus("error");
+      setTimeout(() => setSaveStatus(""), 3000);
+      return false;
     }
-    setTimeout(() => setSaveStatus(""), 3000);
   }
 
   async function callAgent(userMsg: string, newMessages?: Message[], tipo?: string) {
@@ -177,7 +180,7 @@ export default function Home() {
     setLoading(false);
   }
 
-  function handleSubmitData() {
+  async function handleSubmitData() {
     const t = parseFloat(temp), p = parseFloat(ph), h = parseFloat(hum);
     if (isNaN(t) || isNaN(p) || isNaN(h)) return;
 
@@ -187,7 +190,11 @@ export default function Home() {
     setValidationError("");
 
     const status = getStatus(t, p, h, diaActual);
-    saveMedicion(status.key);
+    const saved = await saveMedicion(status.key);
+    if (!saved) {
+      setValidationError("No se pudo guardar la medición. Verifica tu conexión e intenta de nuevo.");
+      return;
+    }
     const nombre = selectedInfo?.nombre ? `${selectedInfo.nombre} (#${compostera})` : `#${compostera}`;
     const nivelHum = HUMEDAD_NIVELES.find((n) => n.value === h);
     let msg = `DATOS DE COMPOSTERA ${nombre}`;

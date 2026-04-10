@@ -119,7 +119,11 @@ export default function Home() {
   const [freeQuestion, setFreeQuestion] = useState("");
   const [saveStatus, setSaveStatus] = useState<"" | "ok" | "error">("");
   const [validationError, setValidationError] = useState("");
+  const [foto, setFoto] = useState<File | null>(null);
+  const [fotoPreview, setFotoPreview] = useState("");
+  const [fotoUploading, setFotoUploading] = useState(false);
   const chatEnd = useRef<HTMLDivElement>(null);
+  const fotoInput = useRef<HTMLInputElement>(null);
 
   const fetchComposteras = useCallback(async () => {
     try {
@@ -136,7 +140,58 @@ export default function Home() {
   const diaActual = selectedInfo?.fecha_inicio ? diasDesde(selectedInfo.fecha_inicio.split("T")[0]) : null;
   const activeComposteras = composteras.filter((c) => c.activa);
 
-  async function saveMedicion(estado: string): Promise<boolean> {
+  function compressImage(file: File, maxWidth = 1200, quality = 0.7): Promise<File> {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        let w = img.width, h = img.height;
+        if (w > maxWidth) { h = (h * maxWidth) / w; w = maxWidth; }
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext("2d")!.drawImage(img, 0, 0, w, h);
+        canvas.toBlob(
+          (blob) => resolve(new File([blob!], file.name, { type: "image/jpeg" })),
+          "image/jpeg",
+          quality,
+        );
+      };
+      img.src = URL.createObjectURL(file);
+    });
+  }
+
+  function handleFoto(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setFoto(file);
+    setFotoPreview(URL.createObjectURL(file));
+  }
+
+  function clearFoto() {
+    setFoto(null);
+    setFotoPreview("");
+    if (fotoInput.current) fotoInput.current.value = "";
+  }
+
+  async function uploadFoto(): Promise<string | null> {
+    if (!foto) return null;
+    setFotoUploading(true);
+    try {
+      const compressed = await compressImage(foto);
+      const formData = new FormData();
+      formData.append("foto", compressed);
+      const res = await fetch("/api/upload", { method: "POST", body: formData });
+      if (!res.ok) return null;
+      const data = await res.json();
+      return data.url;
+    } catch {
+      return null;
+    } finally {
+      setFotoUploading(false);
+    }
+  }
+
+  async function saveMedicion(estado: string, fotoUrl: string | null): Promise<boolean> {
     try {
       const res = await fetch("/api/mediciones", {
         method: "POST",
@@ -144,7 +199,7 @@ export default function Home() {
         body: JSON.stringify({
           compostera: parseInt(compostera), dia: diaActual,
           temperatura: parseFloat(temp), ph: parseFloat(ph), humedad: parseFloat(hum),
-          observaciones: obs || null, estado,
+          observaciones: obs || null, estado, foto_url: fotoUrl,
         }),
       });
       setSaveStatus(res.ok ? "ok" : "error");
@@ -190,7 +245,15 @@ export default function Home() {
     setValidationError("");
 
     const status = getStatus(t, p, h, diaActual);
-    const saved = await saveMedicion(status.key);
+
+    // Upload photo first if present
+    let fotoUrl: string | null = null;
+    if (foto) {
+      fotoUrl = await uploadFoto();
+      // Photo upload failure is not blocking — save measurement anyway
+    }
+
+    const saved = await saveMedicion(status.key, fotoUrl);
     if (!saved) {
       setValidationError("No se pudo guardar la medición. Verifica tu conexión e intenta de nuevo.");
       return;
@@ -223,6 +286,7 @@ export default function Home() {
     setMessages([]);
     setCompostera("1");
     setTemp(""); setPh(""); setHum(""); setObs(""); setFreeQuestion("");
+    clearFoto();
   }
 
   const canSubmit = temp !== "" && ph !== "" && hum !== "";
@@ -364,9 +428,50 @@ export default function Home() {
                 </div>
               )}
 
-              <div className="mb-5">
+              <div className="mb-4">
                 <label className="input-label">Observaciones (opcional)</label>
                 <input type="text" placeholder="Olor, color, fauna, volteo reciente..." value={obs} onChange={(e) => setObs(e.target.value)} className="input-field" />
+              </div>
+
+              <div className="mb-5">
+                <label className="input-label">Foto (opcional)</label>
+                <input
+                  ref={fotoInput}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handleFoto}
+                  className="hidden"
+                />
+                {!fotoPreview ? (
+                  <button
+                    type="button"
+                    onClick={() => fotoInput.current?.click()}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 border-dashed border-verde-200 text-verde-600 text-[13px] font-semibold transition-colors hover:border-verde-400 hover:bg-verde-50/50 active:scale-[0.98]"
+                  >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
+                    </svg>
+                    Tomar foto de la composta
+                  </button>
+                ) : (
+                  <div className="relative">
+                    <img src={fotoPreview} alt="Preview" className="w-full h-40 object-cover rounded-xl" />
+                    <button
+                      type="button"
+                      onClick={clearFoto}
+                      className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/50 text-white flex items-center justify-center text-[14px] font-bold hover:bg-black/70"
+                    >
+                      &times;
+                    </button>
+                    {fotoUploading && (
+                      <div className="absolute inset-0 bg-white/60 rounded-xl flex items-center justify-center">
+                        <span className="text-[13px] font-semibold text-verde-700 animate-pulse-fade">Subiendo foto...</span>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {validationError && (

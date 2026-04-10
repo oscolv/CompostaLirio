@@ -12,6 +12,7 @@ type Medicion = {
   humedad: number;
   observaciones: string | null;
   estado: string;
+  foto_url: string | null;
   created_at: string;
 };
 
@@ -172,6 +173,13 @@ export default function Historial() {
                     </div>
                   ))}
                 </div>
+                {m.foto_url && (
+                  <div className="mt-2.5">
+                    <a href={m.foto_url} target="_blank" rel="noopener noreferrer">
+                      <img src={m.foto_url} alt={`Foto compostera #${m.compostera}`} className="w-full h-32 object-cover rounded-lg" />
+                    </a>
+                  </div>
+                )}
                 {(m.dia || m.observaciones) && (
                   <div className="mt-2.5 pt-2.5 border-t border-black/5 flex flex-col gap-0.5">
                     {m.dia && (

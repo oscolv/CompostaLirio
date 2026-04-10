@@ -13,6 +13,7 @@ export async function POST(req: NextRequest) {
       humedad: body.humedad,
       observaciones: body.observaciones || null,
       estado: body.estado || "good",
+      foto_url: body.foto_url || null,
     });
     return NextResponse.json(result);
   } catch (e: unknown) {

@@ -18,9 +18,13 @@ export async function ensureTable() {
       humedad REAL NOT NULL,
       observaciones TEXT,
       estado TEXT NOT NULL DEFAULT 'good',
+      foto_url TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `;
+  // Migration: add foto_url column if missing
+  await sql`ALTER TABLE mediciones ADD COLUMN IF NOT EXISTS foto_url TEXT`;
+
   await sql`
     CREATE TABLE IF NOT EXISTS composteras (
       id INTEGER PRIMARY KEY,
@@ -49,11 +53,12 @@ export async function insertMedicion(data: {
   humedad: number;
   observaciones: string | null;
   estado: string;
+  foto_url: string | null;
 }) {
   const sql = getSQL();
   const result = await sql`
-    INSERT INTO mediciones (compostera, dia, temperatura, ph, humedad, observaciones, estado)
-    VALUES (${data.compostera}, ${data.dia}, ${data.temperatura}, ${data.ph}, ${data.humedad}, ${data.observaciones}, ${data.estado})
+    INSERT INTO mediciones (compostera, dia, temperatura, ph, humedad, observaciones, estado, foto_url)
+    VALUES (${data.compostera}, ${data.dia}, ${data.temperatura}, ${data.ph}, ${data.humedad}, ${data.observaciones}, ${data.estado}, ${data.foto_url})
     RETURNING id, created_at
   `;
   return result[0];

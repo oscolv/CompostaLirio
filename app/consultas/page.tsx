@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import Markdown from "react-markdown";
 
 type Consulta = {
   id: number;
@@ -172,9 +173,9 @@ export default function Consultas() {
                         <div className="text-[11px] font-semibold text-verde-600 uppercase tracking-wider mb-1.5">
                           Respuesta del agente
                         </div>
-                        <p className="text-[13px] text-gray-600 leading-relaxed whitespace-pre-wrap">
-                          {c.respuesta}
-                        </p>
+                        <div className="text-[13px] text-gray-600 leading-relaxed prose-chat">
+                          <Markdown>{c.respuesta}</Markdown>
+                        </div>
                       </div>
                     )}
                     {!isOpen && c.respuesta && (

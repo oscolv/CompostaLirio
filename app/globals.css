@@ -74,3 +74,64 @@
 .animate-fade-in {
   animation: fade-in 0.3s ease-out;
 }
+
+/* Markdown rendered inside chat bubbles */
+.prose-chat p {
+  margin-bottom: 0.6em;
+}
+.prose-chat p:last-child {
+  margin-bottom: 0;
+}
+.prose-chat strong {
+  font-weight: 700;
+  color: inherit;
+}
+.prose-chat em {
+  font-style: italic;
+}
+.prose-chat ul,
+.prose-chat ol {
+  margin: 0.4em 0 0.6em 0;
+  padding-left: 1.3em;
+}
+.prose-chat li {
+  margin-bottom: 0.25em;
+}
+.prose-chat ul li {
+  list-style-type: disc;
+}
+.prose-chat ol li {
+  list-style-type: decimal;
+}
+.prose-chat ul ul {
+  margin: 0.15em 0 0.15em 0;
+}
+.prose-chat ul ul li {
+  list-style-type: circle;
+}
+.prose-chat h1, .prose-chat h2, .prose-chat h3, .prose-chat h4 {
+  font-weight: 700;
+  margin: 0.8em 0 0.3em 0;
+  line-height: 1.3;
+}
+.prose-chat h1 { font-size: 1.1em; }
+.prose-chat h2 { font-size: 1.05em; }
+.prose-chat h3 { font-size: 1em; }
+.prose-chat code {
+  background: rgba(0,0,0,0.06);
+  padding: 0.15em 0.35em;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+.prose-chat blockquote {
+  border-left: 3px solid rgba(0,0,0,0.15);
+  padding-left: 0.8em;
+  margin: 0.5em 0;
+  color: inherit;
+  opacity: 0.85;
+}
+.prose-chat hr {
+  border: none;
+  border-top: 1px solid rgba(0,0,0,0.1);
+  margin: 0.8em 0;
+}

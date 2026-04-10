@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
+import Markdown from "react-markdown";
 
 type Status = { label: string; key: string; color: string; bg: string; ring: string };
 
@@ -380,9 +381,9 @@ export default function Home() {
               {messages.map((m, i) => (
                 <div
                   key={i}
-                  className={`rounded-2xl px-4 py-3.5 text-[14px] leading-relaxed whitespace-pre-wrap max-w-[92%] shadow-card ${
+                  className={`rounded-2xl px-4 py-3.5 text-[14px] leading-relaxed max-w-[92%] shadow-card ${
                     m.role === "user"
-                      ? "bg-verde-800 text-white self-end rounded-br-md"
+                      ? "bg-verde-800 text-white self-end rounded-br-md whitespace-pre-wrap"
                       : "bg-white text-gray-700 self-start rounded-bl-md border border-verde-100"
                   }`}
                 >
@@ -392,7 +393,13 @@ export default function Home() {
                       Agente de Composta
                     </div>
                   )}
-                  {m.content}
+                  {m.role === "assistant" ? (
+                    <div className="prose-chat">
+                      <Markdown>{m.content}</Markdown>
+                    </div>
+                  ) : (
+                    m.content
+                  )}
                 </div>
               ))}
               {loading && (

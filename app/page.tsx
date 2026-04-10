@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 
 type Status = { emoji: string; label: string; key: string };
@@ -15,10 +15,24 @@ function getStatus(temp: number, ph: number, hum: number): Status {
 
 type Message = { role: "user" | "assistant"; content: string };
 
+type ComposteraInfo = {
+  id: number;
+  nombre: string | null;
+  fecha_inicio: string | null;
+  activa: boolean;
+};
+
+function diasDesde(fecha: string): number {
+  const inicio = new Date(fecha + "T00:00:00");
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+  return Math.floor((hoy.getTime() - inicio.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+}
+
 export default function Home() {
-  const [view, setView] = useState<"input" | "chat">("input");
+  const [mode, setMode] = useState<"select" | "registro" | "pregunta" | "chat">("select");
+  const [composteras, setComposteras] = useState<ComposteraInfo[]>([]);
   const [compostera, setCompostera] = useState("1");
-  const [dias, setDias] = useState("");
   const [temp, setTemp] = useState("");
   const [ph, setPh] = useState("");
   const [hum, setHum] = useState("");
@@ -28,9 +42,26 @@ export default function Home() {
   const [freeQuestion, setFreeQuestion] = useState("");
   const chatEnd = useRef<HTMLDivElement>(null);
 
+  const fetchComposteras = useCallback(async () => {
+    try {
+      const res = await fetch("/api/composteras");
+      const rows = await res.json();
+      if (Array.isArray(rows)) setComposteras(rows);
+    } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => {
+    fetchComposteras();
+  }, [fetchComposteras]);
+
   useEffect(() => {
     chatEnd.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
+
+  const selectedInfo = composteras.find((c) => c.id === parseInt(compostera));
+  const diaActual =
+    selectedInfo?.fecha_inicio ? diasDesde(selectedInfo.fecha_inicio.split("T")[0]) : null;
+  const activeComposteras = composteras.filter((c) => c.activa);
 
   async function saveMedicion(estado: string) {
     try {
@@ -39,7 +70,7 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           compostera: parseInt(compostera),
-          dia: dias ? parseInt(dias) : null,
+          dia: diaActual,
           temperatura: parseFloat(temp),
           ph: parseFloat(ph),
           humedad: parseFloat(hum),
@@ -47,9 +78,7 @@ export default function Home() {
           estado,
         }),
       });
-    } catch {
-      // silently fail — the chat still works without DB
-    }
+    } catch { /* silently fail */ }
   }
 
   async function callAgent(userMsg: string, newMessages?: Message[]) {
@@ -93,15 +122,18 @@ export default function Home() {
     const status = getStatus(t, p, h);
     saveMedicion(status.key);
 
-    let msg = `DATOS DE COMPOSTERA #${compostera}`;
-    if (dias) msg += ` | D\u00eda ${dias} del proceso`;
+    const nombre = selectedInfo?.nombre
+      ? `${selectedInfo.nombre} (#${compostera})`
+      : `#${compostera}`;
+    let msg = `DATOS DE COMPOSTERA ${nombre}`;
+    if (diaActual) msg += ` | D\u00eda ${diaActual} del proceso`;
     msg += `\n- Temperatura: ${t}\u00b0C\n- pH: ${p}\n- Humedad: ${h}%`;
     if (obs.trim()) msg += `\n- Observaciones: ${obs}`;
     msg += `\n\nDame tu diagn\u00f3stico y recomendaciones.`;
 
     const newMsgs: Message[] = [{ role: "user", content: msg }];
     setMessages(newMsgs);
-    setView("chat");
+    setMode("chat");
     callAgent(msg, newMsgs);
   }
 
@@ -111,18 +143,19 @@ export default function Home() {
     setFreeQuestion("");
     const newMsgs: Message[] = [...messages, { role: "user", content: q }];
     setMessages(newMsgs);
+    if (mode !== "chat") setMode("chat");
     callAgent(q, newMsgs);
   }
 
   function resetAll() {
-    setView("input");
+    setMode("select");
     setMessages([]);
     setCompostera("1");
-    setDias("");
     setTemp("");
     setPh("");
     setHum("");
     setObs("");
+    setFreeQuestion("");
   }
 
   const canSubmit = temp !== "" && ph !== "" && hum !== "";
@@ -144,56 +177,90 @@ export default function Home() {
         <h1 className="font-display text-[26px] font-black leading-tight">
           Agente de Composta
         </h1>
-        <div className="text-sm opacity-80 mt-1 flex items-center justify-between">
-          <span>Lirio acu&aacute;tico &middot; 10 composteras &middot; 2 ton</span>
-          <Link
-            href="/historial"
-            className="underline underline-offset-2 opacity-90 hover:opacity-100"
-          >
+        <div className="text-sm opacity-80 mt-1 flex items-center gap-3">
+          <span>Lirio acu&aacute;tico</span>
+          <span className="opacity-50">|</span>
+          <Link href="/historial" className="underline underline-offset-2 opacity-90 hover:opacity-100">
             Historial
+          </Link>
+          <Link href="/configuracion" className="underline underline-offset-2 opacity-90 hover:opacity-100">
+            Config
           </Link>
         </div>
       </header>
 
       <main className="max-w-[480px] mx-auto px-4 py-4">
-        {view === "input" ? (
+        {/* ---- SELECT MODE ---- */}
+        {mode === "select" && (
+          <div className="flex flex-col gap-4">
+            <button
+              onClick={() => setMode("registro")}
+              className="bg-crema-50 border-2 border-verde-800 rounded-xl p-5 text-left active:bg-verde-50"
+            >
+              <div className="text-base font-bold text-verde-800 mb-1">
+                {"\u{1F4CB}"} Registrar medici&oacute;n
+              </div>
+              <div className="text-sm text-gray-500">
+                Capturar temperatura, pH y humedad de una compostera
+              </div>
+            </button>
+
+            <button
+              onClick={() => setMode("pregunta")}
+              className="bg-crema-50 border-2 border-crema-500 rounded-xl p-5 text-left active:bg-crema-200"
+            >
+              <div className="text-base font-bold text-tierra-600 mb-1">
+                {"\u{1F4AC}"} Solo preguntar
+              </div>
+              <div className="text-sm text-gray-500">
+                Hacer una pregunta sobre compostaje sin registrar datos
+              </div>
+            </button>
+          </div>
+        )}
+
+        {/* ---- REGISTRO MODE ---- */}
+        {mode === "registro" && (
           <>
-            {/* Data input form */}
-            <div className="bg-crema-50 border-2 border-verde-800 rounded-xl p-5 mb-4">
+            <button
+              onClick={resetAll}
+              className="flex items-center gap-1.5 text-verde-800 font-bold text-sm mb-3 active:opacity-70"
+            >
+              &larr; Volver
+            </button>
+
+            <div className="bg-crema-50 border-2 border-verde-800 rounded-xl p-5">
               <div className="text-base font-bold mb-4 text-verde-800">
                 {"\u{1F4CB}"} Registro de monitoreo
               </div>
 
-              <div className="grid grid-cols-2 gap-3 mb-3">
-                <div>
-                  <label className="text-[13px] font-bold text-verde-800 uppercase tracking-wider mb-1 block">
-                    Compostera #
-                  </label>
-                  <select
-                    value={compostera}
-                    onChange={(e) => setCompostera(e.target.value)}
-                    className="w-full px-3 py-3 border-2 border-verde-800 rounded-lg text-base bg-crema-100 outline-none"
-                  >
-                    {Array.from({ length: 10 }, (_, i) => (
-                      <option key={i + 1} value={i + 1}>
-                        {i + 1}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-[13px] font-bold text-verde-800 uppercase tracking-wider mb-1 block">
-                    D&iacute;a del proceso
-                  </label>
-                  <input
-                    type="number"
-                    placeholder="ej: 12"
-                    value={dias}
-                    onChange={(e) => setDias(e.target.value)}
-                    className="w-full px-3 py-3 border-2 border-verde-800 rounded-lg text-base bg-crema-100 outline-none"
-                  />
-                </div>
+              {/* Compostera selector */}
+              <div className="mb-3">
+                <label className="text-[13px] font-bold text-verde-800 uppercase tracking-wider mb-1 block">
+                  Compostera
+                </label>
+                <select
+                  value={compostera}
+                  onChange={(e) => setCompostera(e.target.value)}
+                  className="w-full px-3 py-3 border-2 border-verde-800 rounded-lg text-base bg-crema-100 outline-none"
+                >
+                  {(activeComposteras.length > 0
+                    ? activeComposteras
+                    : Array.from({ length: 10 }, (_, i) => ({ id: i + 1, nombre: null } as ComposteraInfo))
+                  ).map((c) => (
+                    <option key={c.id} value={c.id}>
+                      #{c.id}{c.nombre ? ` \u2014 ${c.nombre}` : ""}
+                    </option>
+                  ))}
+                </select>
               </div>
+
+              {/* Auto-calculated day */}
+              {diaActual !== null && (
+                <div className="px-3 py-2 rounded-lg mb-3 text-sm font-medium text-verde-800 bg-verde-50 text-center">
+                  D&iacute;a {diaActual} del proceso
+                </div>
+              )}
 
               <div className="grid grid-cols-3 gap-3 mb-3">
                 <div>
@@ -276,31 +343,39 @@ export default function Home() {
                 {"\u{1F331}"} Pedir diagn&oacute;stico al agente
               </button>
             </div>
+          </>
+        )}
 
-            {/* Quick questions */}
-            <div className="bg-crema-50 border-2 border-crema-500 rounded-xl p-4">
-              <div className="text-sm font-bold mb-2.5 text-tierra-600">
-                {"\u{1F4AC}"} O haz una pregunta libre
+        {/* ---- PREGUNTA MODE ---- */}
+        {mode === "pregunta" && (
+          <>
+            <button
+              onClick={resetAll}
+              className="flex items-center gap-1.5 text-verde-800 font-bold text-sm mb-3 active:opacity-70"
+            >
+              &larr; Volver
+            </button>
+
+            <div className="bg-crema-50 border-2 border-crema-500 rounded-xl p-5">
+              <div className="text-base font-bold mb-2 text-tierra-600">
+                {"\u{1F4AC}"} Pregunta libre
               </div>
-              <div className="flex gap-2">
+              <p className="text-sm text-gray-500 mb-4">
+                Pregunta lo que quieras sobre compostaje de lirio. No se registra ning&uacute;n dato.
+              </p>
+              <div className="flex gap-2 mb-3">
                 <input
                   type="text"
                   placeholder="ej: &iquest;Cu&aacute;nto aserr&iacute;n le pongo?"
                   value={freeQuestion}
                   onChange={(e) => setFreeQuestion(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      setView("chat");
-                      handleFreeQuestion();
-                    }
+                    if (e.key === "Enter" && freeQuestion.trim()) handleFreeQuestion();
                   }}
                   className="flex-1 px-3 py-3 border-2 border-crema-500 rounded-lg text-base bg-crema-100 outline-none"
                 />
                 <button
-                  onClick={() => {
-                    setView("chat");
-                    handleFreeQuestion();
-                  }}
+                  onClick={handleFreeQuestion}
                   disabled={!freeQuestion.trim()}
                   className={`px-4 py-3 rounded-lg text-sm font-bold text-crema-100 whitespace-nowrap ${
                     freeQuestion.trim()
@@ -311,7 +386,7 @@ export default function Home() {
                   Enviar
                 </button>
               </div>
-              <div className="flex flex-wrap gap-1.5 mt-2.5">
+              <div className="flex flex-wrap gap-1.5">
                 {[
                   "\u00bfCu\u00e1ndo voltear?",
                   "\u00bfC\u00f3mo bajar humedad?",
@@ -329,14 +404,16 @@ export default function Home() {
               </div>
             </div>
           </>
-        ) : (
+        )}
+
+        {/* ---- CHAT MODE ---- */}
+        {mode === "chat" && (
           <>
-            {/* Chat view */}
             <button
               onClick={resetAll}
               className="flex items-center gap-1.5 text-verde-800 font-bold text-sm mb-3 active:opacity-70"
             >
-              &larr; Nuevo registro
+              &larr; Inicio
             </button>
 
             <div className="flex flex-col gap-3 mb-4">
@@ -359,7 +436,7 @@ export default function Home() {
               ))}
               {loading && (
                 <div className="bg-crema-50 border-2 border-verde-800 rounded-xl px-4 py-3.5 text-sm text-verde-800 self-start animate-pulse-fade">
-                  {"\u{1F33F}"} Analizando datos...
+                  {"\u{1F33F}"} Analizando...
                 </div>
               )}
               <div ref={chatEnd} />

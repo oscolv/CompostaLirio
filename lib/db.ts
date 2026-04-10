@@ -21,6 +21,14 @@ export async function ensureTable() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `;
+  await sql`
+    CREATE TABLE IF NOT EXISTS composteras (
+      id INTEGER PRIMARY KEY,
+      nombre TEXT,
+      fecha_inicio DATE,
+      activa BOOLEAN NOT NULL DEFAULT TRUE
+    )
+  `;
 }
 
 export async function insertMedicion(data: {
@@ -52,4 +60,26 @@ export async function getMediciones(compostera?: number) {
     `;
   }
   return sql`SELECT * FROM mediciones ORDER BY created_at DESC LIMIT 100`;
+}
+
+export async function getComposteras() {
+  const sql = getSQL();
+  return sql`SELECT * FROM composteras ORDER BY id`;
+}
+
+export async function upsertCompostera(data: {
+  id: number;
+  nombre: string | null;
+  fecha_inicio: string | null;
+  activa: boolean;
+}) {
+  const sql = getSQL();
+  await sql`
+    INSERT INTO composteras (id, nombre, fecha_inicio, activa)
+    VALUES (${data.id}, ${data.nombre}, ${data.fecha_inicio}, ${data.activa})
+    ON CONFLICT (id) DO UPDATE SET
+      nombre = ${data.nombre},
+      fecha_inicio = ${data.fecha_inicio},
+      activa = ${data.activa}
+  `;
 }

@@ -29,6 +29,16 @@ export async function ensureTable() {
       activa BOOLEAN NOT NULL DEFAULT TRUE
     )
   `;
+  await sql`
+    CREATE TABLE IF NOT EXISTS consultas (
+      id SERIAL PRIMARY KEY,
+      tipo TEXT NOT NULL DEFAULT 'pregunta',
+      compostera INTEGER,
+      pregunta TEXT NOT NULL,
+      respuesta TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
 }
 
 export async function insertMedicion(data: {
@@ -65,6 +75,29 @@ export async function getMediciones(compostera?: number) {
 export async function getComposteras() {
   const sql = getSQL();
   return sql`SELECT * FROM composteras ORDER BY id`;
+}
+
+export async function insertConsulta(data: {
+  tipo: string;
+  compostera: number | null;
+  pregunta: string;
+  respuesta: string | null;
+}) {
+  const sql = getSQL();
+  const result = await sql`
+    INSERT INTO consultas (tipo, compostera, pregunta, respuesta)
+    VALUES (${data.tipo}, ${data.compostera}, ${data.pregunta}, ${data.respuesta})
+    RETURNING id
+  `;
+  return result[0];
+}
+
+export async function getConsultas(tipo?: string) {
+  const sql = getSQL();
+  if (tipo) {
+    return sql`SELECT * FROM consultas WHERE tipo = ${tipo} ORDER BY created_at DESC LIMIT 200`;
+  }
+  return sql`SELECT * FROM consultas ORDER BY created_at DESC LIMIT 200`;
 }
 
 export async function upsertCompostera(data: {

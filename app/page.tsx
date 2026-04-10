@@ -112,7 +112,7 @@ export default function Home() {
     } catch { /* silently fail */ }
   }
 
-  async function callAgent(userMsg: string, newMessages?: Message[]) {
+  async function callAgent(userMsg: string, newMessages?: Message[], tipo?: string) {
     setLoading(true);
     const msgs: Message[] = newMessages || [...messages, { role: "user", content: userMsg }];
     if (!newMessages) setMessages(msgs);
@@ -120,7 +120,11 @@ export default function Home() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: msgs.map((m) => ({ role: m.role, content: m.content })) }),
+        body: JSON.stringify({
+          messages: msgs.map((m) => ({ role: m.role, content: m.content })),
+          tipo: tipo || "pregunta",
+          compostera: tipo === "diagnostico" ? parseInt(compostera) : null,
+        }),
       });
       const data = await res.json();
       const reply = data.reply || data.error || "Error al obtener respuesta. Intenta de nuevo.";
@@ -145,7 +149,7 @@ export default function Home() {
     const newMsgs: Message[] = [{ role: "user", content: msg }];
     setMessages(newMsgs);
     setMode("chat");
-    callAgent(msg, newMsgs);
+    callAgent(msg, newMsgs, "diagnostico");
   }
 
   function handleFreeQuestion() {
@@ -190,8 +194,12 @@ export default function Home() {
               Historial
             </Link>
             <span className="w-px h-3 bg-verde-600" />
+            <Link href="/consultas" className="hover:text-white transition-colors">
+              Consultas
+            </Link>
+            <span className="w-px h-3 bg-verde-600" />
             <Link href="/configuracion" className="hover:text-white transition-colors">
-              Configuraci&oacute;n
+              Config
             </Link>
           </nav>
         </div>

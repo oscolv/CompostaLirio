@@ -29,6 +29,14 @@ function IconArrowLeft() {
   );
 }
 
+function IconDownload() {
+  return (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+    </svg>
+  );
+}
+
 export default function Historial() {
   const [mediciones, setMediciones] = useState<Medicion[]>([]);
   const [filtro, setFiltro] = useState("");
@@ -50,6 +58,24 @@ export default function Historial() {
   }, [filtro]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  function downloadCSV() {
+    if (mediciones.length === 0) return;
+    const header = "ID,Compostera,Dia,Temperatura,pH,Humedad,Estado,Observaciones,Fecha";
+    const rows = mediciones.map((m) => {
+      const fecha = new Date(m.created_at).toLocaleString("es-MX");
+      const obs = (m.observaciones || "").replace(/"/g, '""');
+      return `${m.id},${m.compostera},${m.dia ?? ""},${m.temperatura},${m.ph},${m.humedad},${m.estado},"${obs}","${fecha}"`;
+    });
+    const csv = [header, ...rows].join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `composta-lirio-mediciones${filtro ? `-compostera-${filtro}` : ""}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   return (
     <div className="min-h-screen bg-crema-100">
@@ -73,17 +99,25 @@ export default function Historial() {
       </header>
 
       <main className="max-w-[480px] mx-auto px-4 py-5">
-        <div className="mb-4">
+        <div className="flex gap-2 mb-4">
           <select
             value={filtro}
             onChange={(e) => setFiltro(e.target.value)}
-            className="input-field"
+            className="input-field flex-1"
           >
             <option value="">Todas las composteras</option>
             {Array.from({ length: 10 }, (_, i) => (
               <option key={i + 1} value={i + 1}>Compostera #{i + 1}</option>
             ))}
           </select>
+          <button
+            onClick={downloadCSV}
+            disabled={mediciones.length === 0}
+            className="flex items-center gap-1.5 px-4 py-3 rounded-xl bg-verde-700 text-white text-[13px] font-semibold shadow-card transition-all active:scale-95 disabled:bg-gray-300 disabled:shadow-none"
+          >
+            <IconDownload />
+            CSV
+          </button>
         </div>
 
         {loading && (

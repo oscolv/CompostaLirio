@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { SYSTEM_PROMPT } from "@/lib/prompt";
 
 export async function POST(req: NextRequest) {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = process.env.DEEPSEEK_API_KEY;
   if (!apiKey) {
-    console.error("[chat] ANTHROPIC_API_KEY is not set");
+    console.error("[chat] DEEPSEEK_API_KEY is not set");
     return NextResponse.json(
-      { error: "ANTHROPIC_API_KEY no configurada en el servidor." },
+      { error: "DEEPSEEK_API_KEY no configurada en el servidor." },
       { status: 500 },
     );
   }
@@ -21,24 +21,25 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+    const res = await fetch("https://api.deepseek.com/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
+        Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
+        model: "deepseek-chat",
         max_tokens: 1024,
-        system: SYSTEM_PROMPT,
-        messages,
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          ...messages,
+        ],
       }),
     });
 
     if (!res.ok) {
       const body = await res.text();
-      console.error(`[chat] Anthropic API error ${res.status}:`, body);
+      console.error(`[chat] DeepSeek API error ${res.status}:`, body);
       return NextResponse.json(
         { error: `Error de la API (${res.status}): ${body}` },
         { status: 502 },
@@ -47,8 +48,7 @@ export async function POST(req: NextRequest) {
 
     const data = await res.json();
     const reply =
-      data.content?.map((b: { text?: string }) => b.text || "").join("\n") ||
-      "No pude generar respuesta.";
+      data.choices?.[0]?.message?.content || "No pude generar respuesta.";
 
     return NextResponse.json({ reply });
   } catch (e) {

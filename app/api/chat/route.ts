@@ -2,7 +2,33 @@ import { NextRequest, NextResponse } from "next/server";
 import { SYSTEM_PROMPT } from "@/lib/prompt";
 import { ensureTable, insertConsulta, getMediciones } from "@/lib/db";
 
+// Rate limiting: 30 requests per hour per IP
+const RATE_LIMIT = 30;
+const RATE_WINDOW = 60 * 60 * 1000; // 1 hour
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+
+function checkRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const entry = rateLimitMap.get(ip);
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(ip, { count: 1, resetAt: now + RATE_WINDOW });
+    return true;
+  }
+  if (entry.count >= RATE_LIMIT) return false;
+  entry.count++;
+  return true;
+}
+
 export async function POST(req: NextRequest) {
+  // Rate limit check
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  if (!checkRateLimit(ip)) {
+    return NextResponse.json(
+      { error: "Demasiadas consultas. Espera un momento antes de intentar de nuevo." },
+      { status: 429 },
+    );
+  }
+
   const apiKey = process.env.DEEPSEEK_API_KEY;
   if (!apiKey) {
     console.error("[chat] DEEPSEEK_API_KEY is not set");

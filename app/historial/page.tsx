@@ -43,6 +43,9 @@ export default function Historial() {
   const [filtro, setFiltro] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [expandido, setExpandido] = useState<number | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
+  const [deleting, setDeleting] = useState<number | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -59,6 +62,22 @@ export default function Historial() {
   }, [filtro]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  async function handleDelete(id: number) {
+    if (confirmDelete !== id) {
+      setConfirmDelete(id);
+      return;
+    }
+    setDeleting(id);
+    try {
+      const res = await fetch(`/api/mediciones?id=${id}`, { method: "DELETE" });
+      if (res.ok) {
+        setMediciones((prev) => prev.filter((m) => m.id !== id));
+      }
+    } catch { /* ignore */ }
+    setDeleting(null);
+    setConfirmDelete(null);
+  }
 
   function downloadCSV() {
     if (mediciones.length === 0) return;
@@ -143,8 +162,13 @@ export default function Historial() {
           {mediciones.map((m) => {
             const est = estadoConfig[m.estado] || estadoConfig.good;
             const fecha = new Date(m.created_at);
+            const isOpen = expandido === m.id;
             return (
-              <div key={m.id} className={`rounded-2xl p-4 border shadow-card ${est.bg} ${est.border}`}>
+              <div
+                key={m.id}
+                onClick={() => { if (confirmDelete !== m.id) setExpandido(isOpen ? null : m.id); }}
+                className={`rounded-2xl p-4 border shadow-card cursor-pointer transition-shadow hover:shadow-card-hover ${est.bg} ${est.border}`}
+              >
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
                     <span className={`w-2.5 h-2.5 rounded-full ${est.dot}`} />
@@ -175,7 +199,7 @@ export default function Historial() {
                 </div>
                 {m.foto_url && (
                   <div className="mt-2.5">
-                    <a href={m.foto_url} target="_blank" rel="noopener noreferrer">
+                    <a href={m.foto_url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
                       <img src={m.foto_url} alt={`Foto compostera #${m.compostera}`} className="w-full h-32 object-cover rounded-lg" />
                     </a>
                   </div>
@@ -190,6 +214,21 @@ export default function Historial() {
                     {m.observaciones && (
                       <div className="text-[12px] text-gray-500 italic">{m.observaciones}</div>
                     )}
+                  </div>
+                )}
+                {isOpen && (
+                  <div className="mt-3 pt-3 border-t border-black/5 flex justify-end animate-fade-in">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleDelete(m.id); }}
+                      disabled={deleting === m.id}
+                      className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all ${
+                        confirmDelete === m.id
+                          ? "bg-red-500 text-white"
+                          : "bg-red-50 text-red-600 hover:bg-red-100"
+                      } disabled:opacity-50`}
+                    >
+                      {deleting === m.id ? "Borrando..." : confirmDelete === m.id ? "Confirmar borrar" : "Borrar registro"}
+                    </button>
                   </div>
                 )}
               </div>

@@ -97,6 +97,17 @@ export async function insertConsulta(data: {
   return result[0];
 }
 
+export async function getMedicionById(id: number) {
+  const sql = getSQL();
+  const rows = await sql`SELECT * FROM mediciones WHERE id = ${id}`;
+  return rows[0] || null;
+}
+
+export async function deleteMedicion(id: number) {
+  const sql = getSQL();
+  await sql`DELETE FROM mediciones WHERE id = ${id}`;
+}
+
 export async function deleteConsulta(id: number) {
   const sql = getSQL();
   await sql`DELETE FROM consultas WHERE id = ${id}`;

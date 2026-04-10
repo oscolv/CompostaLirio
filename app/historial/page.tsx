@@ -15,11 +15,19 @@ type Medicion = {
   created_at: string;
 };
 
-const estadoStyle: Record<string, { emoji: string; bg: string }> = {
-  good: { emoji: "\u{1F7E2}", bg: "bg-verde-50" },
-  warning: { emoji: "\u{1F7E1}", bg: "bg-yellow-50" },
-  danger: { emoji: "\u{1F534}", bg: "bg-red-50" },
+const estadoConfig: Record<string, { dot: string; bg: string; border: string }> = {
+  good: { dot: "bg-verde-500", bg: "bg-verde-50/50", border: "border-verde-200/60" },
+  warning: { dot: "bg-amber-500", bg: "bg-amber-50/50", border: "border-amber-200/60" },
+  danger: { dot: "bg-red-500", bg: "bg-red-50/50", border: "border-red-200/60" },
 };
+
+function IconArrowLeft() {
+  return (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+    </svg>
+  );
+}
 
 export default function Historial() {
   const [mediciones, setMediciones] = useState<Medicion[]>([]);
@@ -33,126 +41,113 @@ export default function Historial() {
     try {
       const params = filtro ? `?compostera=${filtro}` : "";
       const res = await fetch(`/api/mediciones${params}`);
-      if (!res.ok) throw new Error("Error al cargar datos");
-      const data = await res.json();
-      setMediciones(data);
+      if (!res.ok) throw new Error();
+      setMediciones(await res.json());
     } catch {
-      setError(
-        "No se pudo conectar a la base de datos. Verifica que Postgres est\u00e9 configurado.",
-      );
+      setError("No se pudo conectar a la base de datos.");
     }
     setLoading(false);
   }, [filtro]);
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-crema-100 via-crema-300 to-crema-400">
-      <header className="bg-verde-800 px-5 py-5 text-crema-100 relative overflow-hidden">
-        <div className="absolute -top-5 -right-2 text-[120px] opacity-[0.08] leading-none select-none">
+    <div className="min-h-screen bg-crema-100">
+      <header className="bg-gradient-to-br from-verde-800 to-verde-950 px-5 py-6 text-white relative overflow-hidden">
+        <div className="absolute -top-8 -right-4 text-[140px] opacity-[0.06] leading-none select-none rotate-12">
           {"\u{1F4CA}"}
         </div>
-        <div className="text-[13px] uppercase tracking-[0.15em] opacity-70 mb-1">
-          San Francisco Bojay
-        </div>
-        <h1 className="font-display text-[26px] font-black leading-tight">
-          Historial
-        </h1>
-        <div className="text-sm opacity-80 mt-1">
-          <Link href="/" className="underline underline-offset-2 opacity-90 hover:opacity-100">
-            &larr; Volver al monitor
-          </Link>
+        <div className="relative">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-verde-200 mb-1.5">
+            San Francisco Bojay
+          </div>
+          <h1 className="font-display text-[28px] font-black leading-tight tracking-tight">
+            Historial
+          </h1>
+          <div className="mt-3">
+            <Link href="/" className="flex items-center gap-1.5 text-[13px] font-medium text-verde-200 hover:text-white transition-colors">
+              <IconArrowLeft /> Volver al monitor
+            </Link>
+          </div>
         </div>
       </header>
 
-      <main className="max-w-[480px] mx-auto px-4 py-4">
-        {/* Filter */}
-        <div className="flex gap-2 mb-4">
+      <main className="max-w-[480px] mx-auto px-4 py-5">
+        <div className="mb-4">
           <select
             value={filtro}
             onChange={(e) => setFiltro(e.target.value)}
-            className="flex-1 px-3 py-3 border-2 border-verde-800 rounded-lg text-base bg-crema-100 outline-none"
+            className="input-field"
           >
             <option value="">Todas las composteras</option>
             {Array.from({ length: 10 }, (_, i) => (
-              <option key={i + 1} value={i + 1}>
-                Compostera #{i + 1}
-              </option>
+              <option key={i + 1} value={i + 1}>Compostera #{i + 1}</option>
             ))}
           </select>
         </div>
 
         {loading && (
-          <div className="text-center text-verde-800 py-8 animate-pulse-fade">
+          <div className="text-center text-verde-600 py-12 text-[14px] animate-pulse-fade">
             Cargando mediciones...
           </div>
         )}
 
         {error && (
-          <div className="bg-red-50 border-2 border-red-200 rounded-xl p-4 text-sm text-red-800">
+          <div className="page-card border-red-200 bg-red-50 text-[14px] text-red-700">
             {error}
           </div>
         )}
 
         {!loading && !error && mediciones.length === 0 && (
-          <div className="text-center text-gray-500 py-8">
+          <div className="text-center text-gray-400 py-12 text-[14px]">
             No hay mediciones registradas a&uacute;n.
           </div>
         )}
 
         <div className="flex flex-col gap-3">
           {mediciones.map((m) => {
-            const est = estadoStyle[m.estado] || estadoStyle.good;
+            const est = estadoConfig[m.estado] || estadoConfig.good;
             const fecha = new Date(m.created_at);
             return (
-              <div
-                key={m.id}
-                className={`${est.bg} border-2 border-verde-800/20 rounded-xl p-4`}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <span className="font-bold text-verde-800">
-                    {est.emoji} Compostera #{m.compostera}
-                  </span>
-                  <span className="text-xs text-gray-500">
+              <div key={m.id} className={`rounded-2xl p-4 border shadow-card ${est.bg} ${est.border}`}>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className={`w-2.5 h-2.5 rounded-full ${est.dot}`} />
+                    <span className="font-semibold text-[14px] text-verde-900">
+                      Compostera #{m.compostera}
+                    </span>
+                  </div>
+                  <span className="text-[11px] font-medium text-gray-400">
                     {fecha.toLocaleDateString("es-MX", {
                       day: "numeric",
                       month: "short",
-                      year: "numeric",
                       hour: "2-digit",
                       minute: "2-digit",
                     })}
                   </span>
                 </div>
-                <div className="grid grid-cols-3 gap-2 text-sm">
-                  <div>
-                    <span className="text-[11px] font-bold text-verde-800/60 uppercase">
-                      Temp
-                    </span>
-                    <div className="font-medium">{m.temperatura}&deg;C</div>
-                  </div>
-                  <div>
-                    <span className="text-[11px] font-bold text-verde-800/60 uppercase">
-                      pH
-                    </span>
-                    <div className="font-medium">{m.ph}</div>
-                  </div>
-                  <div>
-                    <span className="text-[11px] font-bold text-verde-800/60 uppercase">
-                      Humedad
-                    </span>
-                    <div className="font-medium">{m.humedad}%</div>
-                  </div>
+                <div className="grid grid-cols-3 gap-3">
+                  {[
+                    { label: "Temp", value: `${m.temperatura}\u00b0C` },
+                    { label: "pH", value: `${m.ph}` },
+                    { label: "Humedad", value: `${m.humedad}%` },
+                  ].map((d) => (
+                    <div key={d.label} className="bg-white/60 rounded-lg px-2.5 py-2 text-center">
+                      <div className="text-[10px] font-semibold text-verde-700/50 uppercase tracking-wider">{d.label}</div>
+                      <div className="text-[15px] font-semibold text-gray-800 mt-0.5">{d.value}</div>
+                    </div>
+                  ))}
                 </div>
-                {m.dia && (
-                  <div className="text-xs text-gray-500 mt-2">
-                    D&iacute;a {m.dia} del proceso
-                  </div>
-                )}
-                {m.observaciones && (
-                  <div className="text-xs text-gray-600 mt-1 italic">
-                    {m.observaciones}
+                {(m.dia || m.observaciones) && (
+                  <div className="mt-2.5 pt-2.5 border-t border-black/5 flex flex-col gap-0.5">
+                    {m.dia && (
+                      <div className="text-[12px] font-medium text-verde-700/60">
+                        D&iacute;a {m.dia} del proceso
+                      </div>
+                    )}
+                    {m.observaciones && (
+                      <div className="text-[12px] text-gray-500 italic">{m.observaciones}</div>
+                    )}
                   </div>
                 )}
               </div>

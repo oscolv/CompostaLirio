@@ -2,11 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Playfair+Display:wght@700;900&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=Playfair+Display:wght@700;800;900&display=swap");
 
 @layer base {
   body {
     -webkit-tap-highlight-color: transparent;
+    -webkit-font-smoothing: antialiased;
   }
 
   input[type="number"]::-webkit-inner-spin-button,
@@ -16,6 +17,43 @@
   }
   input[type="number"] {
     -moz-appearance: textfield;
+    appearance: textfield;
+  }
+
+  select {
+    -webkit-appearance: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%23224517' viewBox='0 0 16 16'%3E%3Cpath d='M4.646 5.646a.5.5 0 0 1 .708 0L8 8.293l2.646-2.647a.5.5 0 0 1 .708.708l-3 3a.5.5 0 0 1-.708 0l-3-3a.5.5 0 0 1 0-.708z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    padding-right: 36px;
+  }
+}
+
+@layer components {
+  .input-field {
+    @apply w-full px-3.5 py-3 border border-verde-200 rounded-xl text-[15px] bg-white
+           outline-none transition-all duration-200
+           focus:border-verde-500 focus:ring-2 focus:ring-verde-100
+           placeholder:text-gray-300;
+  }
+
+  .input-label {
+    @apply text-[11px] font-semibold text-verde-700/70 uppercase tracking-widest mb-1.5 block;
+  }
+
+  .btn-primary {
+    @apply w-full py-3.5 rounded-xl text-[15px] font-semibold text-white
+           bg-verde-700 shadow-card transition-all duration-200
+           active:scale-[0.98] active:shadow-none;
+  }
+
+  .btn-primary:disabled {
+    @apply bg-gray-300 shadow-none cursor-not-allowed active:scale-100;
+  }
+
+  .page-card {
+    @apply bg-white rounded-2xl shadow-card-lg p-5 border border-verde-100/50;
   }
 }
 
@@ -26,4 +64,13 @@
 
 .animate-pulse-fade {
   animation: pulse-fade 1.5s ease-in-out infinite;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out;
 }

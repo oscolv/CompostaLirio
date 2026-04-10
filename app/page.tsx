@@ -122,6 +122,7 @@ export default function Home() {
   const [foto, setFoto] = useState<File | null>(null);
   const [fotoPreview, setFotoPreview] = useState("");
   const [fotoUploading, setFotoUploading] = useState(false);
+  const [datosGuardados, setDatosGuardados] = useState(false);
   const chatEnd = useRef<HTMLDivElement>(null);
   const fotoInput = useRef<HTMLInputElement>(null);
 
@@ -235,7 +236,7 @@ export default function Home() {
     setLoading(false);
   }
 
-  async function handleSubmitData() {
+  async function handleGuardar() {
     const t = parseFloat(temp), p = parseFloat(ph), h = parseFloat(hum);
     if (isNaN(t) || isNaN(p) || isNaN(h)) return;
 
@@ -243,6 +244,7 @@ export default function Home() {
     if (t < 0 || t > 100) { setValidationError("Temperatura debe estar entre 0 y 100\u00b0C"); return; }
     if (p < 0 || p > 14) { setValidationError("pH debe estar entre 0 y 14"); return; }
     setValidationError("");
+    setLoading(true);
 
     const status = getStatus(t, p, h, diaActual);
 
@@ -250,14 +252,19 @@ export default function Home() {
     let fotoUrl: string | null = null;
     if (foto) {
       fotoUrl = await uploadFoto();
-      // Photo upload failure is not blocking — save measurement anyway
     }
 
     const saved = await saveMedicion(status.key, fotoUrl);
+    setLoading(false);
     if (!saved) {
       setValidationError("No se pudo guardar la medición. Verifica tu conexión e intenta de nuevo.");
       return;
     }
+    setDatosGuardados(true);
+  }
+
+  function handlePedirDiagnostico() {
+    const t = parseFloat(temp), p = parseFloat(ph), h = parseFloat(hum);
     const nombre = selectedInfo?.nombre ? `${selectedInfo.nombre} (#${compostera})` : `#${compostera}`;
     const nivelHum = HUMEDAD_NIVELES.find((n) => n.value === h);
     let msg = `DATOS DE COMPOSTERA ${nombre}`;
@@ -287,6 +294,7 @@ export default function Home() {
     setCompostera("1");
     setTemp(""); setPh(""); setHum(""); setObs(""); setFreeQuestion("");
     clearFoto();
+    setDatosGuardados(false);
   }
 
   const canSubmit = temp !== "" && ph !== "" && hum !== "";
@@ -490,15 +498,27 @@ export default function Home() {
                 </div>
               )}
 
-              <button onClick={handleSubmitData} disabled={!canSubmit} className="btn-primary">
-                Pedir diagn&oacute;stico
-              </button>
+              {!datosGuardados ? (
+                <button onClick={handleGuardar} disabled={!canSubmit || loading} className="btn-primary">
+                  {loading ? "Guardando..." : "Guardar medici\u00f3n"}
+                </button>
+              ) : (
+                <div className="flex flex-col gap-2 animate-fade-in">
+                  <div className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-[13px] font-semibold text-verde-700 bg-verde-50 ring-1 ring-verde-200">
+                    &#x2713; Medici&oacute;n guardada
+                  </div>
+                  <button onClick={handlePedirDiagnostico} className="btn-primary">
+                    Pedir diagn&oacute;stico al agente
+                  </button>
+                  <button onClick={resetAll} className="w-full py-3 rounded-xl text-[13px] font-semibold text-gray-500 bg-white border border-gray-200 shadow-card transition-all active:scale-[0.98]">
+                    Listo, no necesito diagn&oacute;stico
+                  </button>
+                </div>
+              )}
 
-              {saveStatus && (
-                <div className={`text-center text-[13px] font-medium mt-2 animate-fade-in ${
-                  saveStatus === "ok" ? "text-verde-600" : "text-red-600"
-                }`}>
-                  {saveStatus === "ok" ? "\u2713 Medici\u00f3n guardada" : "\u2717 Error al guardar medici\u00f3n"}
+              {saveStatus === "error" && (
+                <div className="text-center text-[13px] font-medium mt-2 animate-fade-in text-red-600">
+                  &#x2717; Error al guardar medici&oacute;n
                 </div>
               )}
             </div>

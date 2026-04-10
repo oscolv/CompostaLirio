@@ -164,7 +164,7 @@ export default function Historial() {
                   {[
                     { label: "Temp", value: `${m.temperatura}\u00b0C` },
                     { label: "pH", value: `${m.ph}` },
-                    { label: "Humedad", value: `${m.humedad}%` },
+                    { label: "Humedad", value: ({ 20: "DRY++", 30: "DRY+", 40: "DRY", 55: "WET", 70: "WET+", 85: "WET++" } as Record<number, string>)[m.humedad] || `${m.humedad}%` },
                   ].map((d) => (
                     <div key={d.label} className="bg-white/60 rounded-lg px-2.5 py-2 text-center">
                       <div className="text-[10px] font-semibold text-verde-700/50 uppercase tracking-wider">{d.label}</div>

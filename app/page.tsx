@@ -42,6 +42,15 @@ function getStatus(temp: number, ph: number, hum: number, dia?: number | null): 
 
 type Message = { role: "user" | "assistant"; content: string };
 
+const HUMEDAD_NIVELES: { label: string; value: number }[] = [
+  { label: "DRY++", value: 20 },
+  { label: "DRY+", value: 30 },
+  { label: "DRY", value: 40 },
+  { label: "WET", value: 55 },
+  { label: "WET+", value: 70 },
+  { label: "WET++", value: 85 },
+];
+
 type ComposteraInfo = {
   id: number;
   nombre: string | null;
@@ -175,15 +184,15 @@ export default function Home() {
     // Validate ranges
     if (t < 0 || t > 100) { setValidationError("Temperatura debe estar entre 0 y 100\u00b0C"); return; }
     if (p < 0 || p > 14) { setValidationError("pH debe estar entre 0 y 14"); return; }
-    if (h < 0 || h > 100) { setValidationError("Humedad debe estar entre 0 y 100%"); return; }
     setValidationError("");
 
     const status = getStatus(t, p, h, diaActual);
     saveMedicion(status.key);
     const nombre = selectedInfo?.nombre ? `${selectedInfo.nombre} (#${compostera})` : `#${compostera}`;
+    const nivelHum = HUMEDAD_NIVELES.find((n) => n.value === h);
     let msg = `DATOS DE COMPOSTERA ${nombre}`;
     if (diaActual) msg += ` | D\u00eda ${diaActual} del proceso`;
-    msg += `\n- Temperatura: ${t}\u00b0C\n- pH: ${p}\n- Humedad: ${h}%`;
+    msg += `\n- Temperatura: ${t}\u00b0C\n- pH: ${p}\n- Humedad: ${nivelHum ? `${nivelHum.label} (~${h}%)` : `${h}%`}`;
     if (obs.trim()) msg += `\n- Observaciones: ${obs}`;
     msg += `\n\nDame tu diagn\u00f3stico y recomendaciones.`;
     const newMsgs: Message[] = [{ role: "user", content: msg }];
@@ -331,8 +340,13 @@ export default function Home() {
                   <input type="number" step="0.1" min="0" max="14" placeholder="7.0" value={ph} onChange={(e) => setPh(e.target.value)} className="input-field text-center" />
                 </div>
                 <div>
-                  <label className="input-label">Humedad %</label>
-                  <input type="number" step="1" min="0" max="100" placeholder="60" value={hum} onChange={(e) => setHum(e.target.value)} className="input-field text-center" />
+                  <label className="input-label">Humedad</label>
+                  <select value={hum} onChange={(e) => setHum(e.target.value)} className="input-field text-center">
+                    <option value="">—</option>
+                    {HUMEDAD_NIVELES.map((n) => (
+                      <option key={n.label} value={n.value}>{n.label}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
 

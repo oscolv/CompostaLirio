@@ -36,9 +36,12 @@ export async function POST(req: NextRequest) {
         const last5 = recent.slice(0, 5);
         if (last5.length > 0) {
           historyContext = `\n\nHISTORIAL RECIENTE DE COMPOSTERA #${compostera} (${last5.length} mediciones anteriores, de más reciente a más antigua):\n`;
+          const humedadNiveles: Record<number, string> = { 20: "DRY++", 30: "DRY+", 40: "DRY", 55: "WET", 70: "WET+", 85: "WET++" };
           historyContext += last5.map((m: Record<string, unknown>) => {
             const fecha = new Date(m.created_at as string).toLocaleDateString("es-MX", { day: "numeric", month: "short" });
-            return `- ${fecha} (día ${m.dia ?? "?"}): Temp ${m.temperatura}°C, pH ${m.ph}, Humedad ${m.humedad}%${m.observaciones ? `, Obs: ${m.observaciones}` : ""} → ${m.estado}`;
+            const humVal = Number(m.humedad);
+            const humLabel = humedadNiveles[humVal] ? `${humedadNiveles[humVal]} (~${humVal}%)` : `${humVal}%`;
+            return `- ${fecha} (día ${m.dia ?? "?"}): Temp ${m.temperatura}°C, pH ${m.ph}, Humedad ${humLabel}${m.observaciones ? `, Obs: ${m.observaciones}` : ""} → ${m.estado}`;
           }).join("\n");
           historyContext += "\n\nUsa este historial para detectar tendencias (temperatura subiendo/bajando, humedad persistente, etc.) y menciona si ves algo relevante en la evolución.";
         }

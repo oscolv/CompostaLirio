@@ -321,6 +321,16 @@ export default function Home() {
             <Link href="/configuracion" className="hover:text-white transition-colors">
               Config
             </Link>
+            <span className="w-px h-3 bg-verde-600" />
+            <button
+              onClick={async () => {
+                await fetch("/api/auth/logout", { method: "POST" });
+                window.location.href = "/login";
+              }}
+              className="hover:text-white transition-colors"
+            >
+              Salir
+            </button>
           </nav>
         </div>
       </header>

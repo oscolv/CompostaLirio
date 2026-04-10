@@ -43,6 +43,8 @@ export default function Consultas() {
   const [expandido, setExpandido] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [deleting, setDeleting] = useState<number | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -59,6 +61,22 @@ export default function Consultas() {
   }, [filtro]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  async function handleDelete(id: number) {
+    if (confirmDelete !== id) {
+      setConfirmDelete(id);
+      return;
+    }
+    setDeleting(id);
+    try {
+      const res = await fetch(`/api/consultas?id=${id}`, { method: "DELETE" });
+      if (res.ok) {
+        setConsultas((prev) => prev.filter((c) => c.id !== id));
+      }
+    } catch { /* ignore */ }
+    setDeleting(null);
+    setConfirmDelete(null);
+  }
 
   const totalDiag = consultas.filter((c) => c.tipo === "diagnostico").length;
   const totalPreg = consultas.filter((c) => c.tipo === "pregunta").length;
@@ -143,10 +161,10 @@ export default function Consultas() {
             const fecha = new Date(c.created_at);
 
             return (
-              <button
+              <div
                 key={c.id}
-                onClick={() => setExpandido(isOpen ? null : c.id)}
-                className="page-card text-left transition-shadow hover:shadow-card-hover active:scale-[0.99]"
+                onClick={() => { if (confirmDelete !== c.id) setExpandido(isOpen ? null : c.id); }}
+                className="page-card text-left transition-shadow hover:shadow-card-hover active:scale-[0.99] cursor-pointer"
               >
                 <div className="flex items-start gap-3">
                   <div className={`mt-0.5 flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center ${
@@ -178,6 +196,21 @@ export default function Consultas() {
                         </div>
                       </div>
                     )}
+                    {isOpen && (
+                      <div className="mt-3 pt-3 border-t border-verde-100/50 flex justify-end">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleDelete(c.id); }}
+                          disabled={deleting === c.id}
+                          className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all ${
+                            confirmDelete === c.id
+                              ? "bg-red-500 text-white"
+                              : "bg-red-50 text-red-600 hover:bg-red-100"
+                          } disabled:opacity-50`}
+                        >
+                          {deleting === c.id ? "Borrando..." : confirmDelete === c.id ? "Confirmar borrar" : "Borrar"}
+                        </button>
+                      </div>
+                    )}
                     {!isOpen && c.respuesta && (
                       <div className="text-[11px] text-verde-600 font-medium mt-1.5">
                         Toca para ver respuesta
@@ -185,7 +218,7 @@ export default function Consultas() {
                     )}
                   </div>
                 </div>
-              </button>
+              </div>
             );
           })}
         </div>

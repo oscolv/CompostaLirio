@@ -97,6 +97,11 @@ export async function insertConsulta(data: {
   return result[0];
 }
 
+export async function deleteConsulta(id: number) {
+  const sql = getSQL();
+  await sql`DELETE FROM consultas WHERE id = ${id}`;
+}
+
 export async function getConsultas(tipo?: string) {
   const sql = getSQL();
   if (tipo) {

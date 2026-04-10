@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SYSTEM_PROMPT } from "@/lib/prompt";
-import { ensureTable, insertConsulta } from "@/lib/db";
+import { ensureTable, insertConsulta, getMediciones } from "@/lib/db";
 
 export async function POST(req: NextRequest) {
   const apiKey = process.env.DEEPSEEK_API_KEY;
@@ -26,6 +26,29 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    // For diagnostics, inject recent history of that compostera
+    let historyContext = "";
+    if (tipo === "diagnostico" && compostera) {
+      try {
+        await ensureTable();
+        const recent = await getMediciones(compostera);
+        // Take last 5 measurements (excluding the one just saved which may not be in DB yet)
+        const last5 = recent.slice(0, 5);
+        if (last5.length > 0) {
+          historyContext = `\n\nHISTORIAL RECIENTE DE COMPOSTERA #${compostera} (${last5.length} mediciones anteriores, de más reciente a más antigua):\n`;
+          historyContext += last5.map((m: Record<string, unknown>) => {
+            const fecha = new Date(m.created_at as string).toLocaleDateString("es-MX", { day: "numeric", month: "short" });
+            return `- ${fecha} (día ${m.dia ?? "?"}): Temp ${m.temperatura}°C, pH ${m.ph}, Humedad ${m.humedad}%${m.observaciones ? `, Obs: ${m.observaciones}` : ""} → ${m.estado}`;
+          }).join("\n");
+          historyContext += "\n\nUsa este historial para detectar tendencias (temperatura subiendo/bajando, humedad persistente, etc.) y menciona si ves algo relevante en la evolución.";
+        }
+      } catch (e) {
+        console.error("[chat] Failed to fetch history:", e);
+      }
+    }
+
+    const systemContent = SYSTEM_PROMPT + historyContext;
+
     const res = await fetch("https://api.deepseek.com/chat/completions", {
       method: "POST",
       headers: {
@@ -36,7 +59,7 @@ export async function POST(req: NextRequest) {
         model: "deepseek-chat",
         max_tokens: 1024,
         messages: [
-          { role: "system", content: SYSTEM_PROMPT },
+          { role: "system", content: systemContent },
           ...messages,
         ],
       }),

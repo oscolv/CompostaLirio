@@ -6,12 +6,38 @@ import Markdown from "react-markdown";
 
 type Status = { label: string; key: string; color: string; bg: string; ring: string };
 
-function getStatus(temp: number, ph: number, hum: number): Status {
-  if (temp < 25 || temp > 70 || ph < 4.5 || ph > 9 || hum < 35 || hum > 80)
-    return { label: "Fuera de rango", key: "danger", color: "text-red-700", bg: "bg-red-50", ring: "ring-red-200" };
-  if (temp < 40 || temp > 65 || ph < 5.5 || ph > 8.5 || hum < 45 || hum > 70)
-    return { label: "Atenci\u00f3n", key: "warning", color: "text-amber-700", bg: "bg-amber-50", ring: "ring-amber-200" };
-  return { label: "En rango", key: "good", color: "text-verde-700", bg: "bg-verde-50", ring: "ring-verde-200" };
+const GOOD: Status = { label: "En rango", key: "good", color: "text-verde-700", bg: "bg-verde-50", ring: "ring-verde-200" };
+const WARN: Status = { label: "Atenci\u00f3n", key: "warning", color: "text-amber-700", bg: "bg-amber-50", ring: "ring-amber-200" };
+const DANGER: Status = { label: "Fuera de rango", key: "danger", color: "text-red-700", bg: "bg-red-50", ring: "ring-red-200" };
+
+function getStatus(temp: number, ph: number, hum: number, dia?: number | null): Status {
+  // Determine phase from day of process
+  let phase: "mesofilica" | "termofilica" | "maduracion" = "mesofilica";
+  if (dia && dia > 30) phase = "maduracion";
+  else if (dia && dia > 7) phase = "termofilica";
+
+  // Phase-specific optimal ranges [min, max]
+  const ranges = {
+    mesofilica:  { temp: [25, 40], ph: [5.5, 7.0], hum: [55, 65] },
+    termofilica: { temp: [55, 65], ph: [7.0, 8.5], hum: [50, 60] },
+    maduracion:  { temp: [25, 40], ph: [6.5, 8.0], hum: [45, 55] },
+  }[phase];
+
+  // Hard danger limits (regardless of phase)
+  if (temp > 75 || temp < 10 || ph < 4.0 || ph > 9.5 || hum < 25 || hum > 85) return DANGER;
+
+  // Check each parameter against phase range with warning margin of ~15%
+  let worst: Status = GOOD;
+  function check(val: number, min: number, max: number) {
+    const margin = (max - min) * 0.3;
+    if (val < min - margin || val > max + margin) worst = DANGER;
+    else if (val < min || val > max) { if (worst !== DANGER) worst = WARN; }
+  }
+
+  check(temp, ranges.temp[0], ranges.temp[1]);
+  check(ph, ranges.ph[0], ranges.ph[1]);
+  check(hum, ranges.hum[0], ranges.hum[1]);
+  return worst;
 }
 
 type Message = { role: "user" | "assistant"; content: string };
@@ -82,6 +108,8 @@ export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
   const [freeQuestion, setFreeQuestion] = useState("");
+  const [saveStatus, setSaveStatus] = useState<"" | "ok" | "error">("");
+  const [validationError, setValidationError] = useState("");
   const chatEnd = useRef<HTMLDivElement>(null);
 
   const fetchComposteras = useCallback(async () => {
@@ -101,7 +129,7 @@ export default function Home() {
 
   async function saveMedicion(estado: string) {
     try {
-      await fetch("/api/mediciones", {
+      const res = await fetch("/api/mediciones", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -110,7 +138,11 @@ export default function Home() {
           observaciones: obs || null, estado,
         }),
       });
-    } catch { /* silently fail */ }
+      setSaveStatus(res.ok ? "ok" : "error");
+    } catch {
+      setSaveStatus("error");
+    }
+    setTimeout(() => setSaveStatus(""), 3000);
   }
 
   async function callAgent(userMsg: string, newMessages?: Message[], tipo?: string) {
@@ -139,7 +171,14 @@ export default function Home() {
   function handleSubmitData() {
     const t = parseFloat(temp), p = parseFloat(ph), h = parseFloat(hum);
     if (isNaN(t) || isNaN(p) || isNaN(h)) return;
-    const status = getStatus(t, p, h);
+
+    // Validate ranges
+    if (t < 0 || t > 100) { setValidationError("Temperatura debe estar entre 0 y 100\u00b0C"); return; }
+    if (p < 0 || p > 14) { setValidationError("pH debe estar entre 0 y 14"); return; }
+    if (h < 0 || h > 100) { setValidationError("Humedad debe estar entre 0 y 100%"); return; }
+    setValidationError("");
+
+    const status = getStatus(t, p, h, diaActual);
     saveMedicion(status.key);
     const nombre = selectedInfo?.nombre ? `${selectedInfo.nombre} (#${compostera})` : `#${compostera}`;
     let msg = `DATOS DE COMPOSTERA ${nombre}`;
@@ -173,7 +212,7 @@ export default function Home() {
   const canSubmit = temp !== "" && ph !== "" && hum !== "";
   const statusPreview =
     canSubmit && !isNaN(parseFloat(temp)) && !isNaN(parseFloat(ph)) && !isNaN(parseFloat(hum))
-      ? getStatus(parseFloat(temp), parseFloat(ph), parseFloat(hum))
+      ? getStatus(parseFloat(temp), parseFloat(ph), parseFloat(hum), diaActual)
       : null;
 
   return (
@@ -285,15 +324,15 @@ export default function Home() {
               <div className="grid grid-cols-3 gap-3 mb-4">
                 <div>
                   <label className="input-label">Temp &deg;C</label>
-                  <input type="number" step="0.1" placeholder="55" value={temp} onChange={(e) => setTemp(e.target.value)} className="input-field text-center" />
+                  <input type="number" step="0.1" min="0" max="100" placeholder="55" value={temp} onChange={(e) => setTemp(e.target.value)} className="input-field text-center" />
                 </div>
                 <div>
                   <label className="input-label">pH</label>
-                  <input type="number" step="0.1" placeholder="7.0" value={ph} onChange={(e) => setPh(e.target.value)} className="input-field text-center" />
+                  <input type="number" step="0.1" min="0" max="14" placeholder="7.0" value={ph} onChange={(e) => setPh(e.target.value)} className="input-field text-center" />
                 </div>
                 <div>
                   <label className="input-label">Humedad %</label>
-                  <input type="number" step="1" placeholder="60" value={hum} onChange={(e) => setHum(e.target.value)} className="input-field text-center" />
+                  <input type="number" step="1" min="0" max="100" placeholder="60" value={hum} onChange={(e) => setHum(e.target.value)} className="input-field text-center" />
                 </div>
               </div>
 
@@ -309,9 +348,23 @@ export default function Home() {
                 <input type="text" placeholder="Olor, color, fauna, volteo reciente..." value={obs} onChange={(e) => setObs(e.target.value)} className="input-field" />
               </div>
 
+              {validationError && (
+                <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl mb-3 text-[13px] font-semibold text-red-700 bg-red-50 ring-1 ring-red-200 animate-fade-in">
+                  {validationError}
+                </div>
+              )}
+
               <button onClick={handleSubmitData} disabled={!canSubmit} className="btn-primary">
                 Pedir diagn&oacute;stico
               </button>
+
+              {saveStatus && (
+                <div className={`text-center text-[13px] font-medium mt-2 animate-fade-in ${
+                  saveStatus === "ok" ? "text-verde-600" : "text-red-600"
+                }`}>
+                  {saveStatus === "ok" ? "\u2713 Medici\u00f3n guardada" : "\u2717 Error al guardar medici\u00f3n"}
+                </div>
+              )}
             </div>
           </div>
         )}

@@ -123,6 +123,7 @@ export default function Home() {
   const [fotoPreview, setFotoPreview] = useState("");
   const [fotoUploading, setFotoUploading] = useState(false);
   const [datosGuardados, setDatosGuardados] = useState(false);
+  const [noGuardarPregunta, setNoGuardarPregunta] = useState(true);
   const chatEnd = useRef<HTMLDivElement>(null);
   const fotoInput = useRef<HTMLInputElement>(null);
 
@@ -217,14 +218,16 @@ export default function Home() {
     setLoading(true);
     const msgs: Message[] = newMessages || [...messages, { role: "user", content: userMsg }];
     if (!newMessages) setMessages(msgs);
+    const tipoFinal = tipo || "pregunta";
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           messages: msgs.map((m) => ({ role: m.role, content: m.content })),
-          tipo: tipo || "pregunta",
-          compostera: tipo === "diagnostico" ? parseInt(compostera) : null,
+          tipo: tipoFinal,
+          compostera: tipoFinal === "diagnostico" ? parseInt(compostera) : null,
+          guardar: tipoFinal === "diagnostico" ? true : !noGuardarPregunta,
         }),
       });
       const data = await res.json();
@@ -539,9 +542,18 @@ export default function Home() {
                 </div>
                 <h2 className="text-[15px] font-semibold text-gray-800">Pregunta libre</h2>
               </div>
-              <p className="text-[13px] text-gray-400 mb-5">
+              <p className="text-[13px] text-gray-400 mb-4">
                 Pregunta lo que quieras sobre compostaje de lirio. No se registra ning&uacute;n dato.
               </p>
+              <label className="flex items-center gap-2 mb-4 text-[13px] text-gray-600 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={noGuardarPregunta}
+                  onChange={(e) => setNoGuardarPregunta(e.target.checked)}
+                  className="w-4 h-4 rounded accent-verde-700"
+                />
+                No guardar esta pregunta en el historial de consultas
+              </label>
               <div className="flex gap-2 mb-4">
                 <input
                   type="text"

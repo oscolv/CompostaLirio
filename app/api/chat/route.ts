@@ -41,11 +41,13 @@ export async function POST(req: NextRequest) {
   let messages;
   let compostera: number | null = null;
   let tipo = "pregunta";
+  let guardar = true;
   try {
     const body = await req.json();
     messages = body.messages;
     compostera = body.compostera ?? null;
     tipo = body.tipo ?? "pregunta";
+    guardar = body.guardar !== false;
   } catch (e) {
     console.error("[chat] Invalid request body:", e);
     return NextResponse.json({ error: "Request body inv\u00e1lido." }, { status: 400 });
@@ -135,7 +137,7 @@ export async function POST(req: NextRequest) {
 
     // Log the last user message + response to consultas
     const lastUserMsg = messages[messages.length - 1];
-    if (lastUserMsg?.content) {
+    if (guardar && lastUserMsg?.content) {
       try {
         await ensureTable();
         await insertConsulta({

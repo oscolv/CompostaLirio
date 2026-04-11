@@ -58,11 +58,19 @@ type ComposteraInfo = {
   activa: boolean;
 };
 
-function diasDesde(fecha: string): number {
+function diasDesde(fecha: string, hasta?: string): number {
   const inicio = new Date(fecha + "T00:00:00");
-  const hoy = new Date();
-  hoy.setHours(0, 0, 0, 0);
-  return Math.floor((hoy.getTime() - inicio.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+  const fin = hasta ? new Date(hasta + "T00:00:00") : new Date();
+  fin.setHours(0, 0, 0, 0);
+  return Math.floor((fin.getTime() - inicio.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+}
+
+function hoyISO(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 /* ---- SVG Icons ---- */
@@ -124,6 +132,7 @@ export default function Home() {
   const [fotoUploading, setFotoUploading] = useState(false);
   const [datosGuardados, setDatosGuardados] = useState(false);
   const [noGuardarPregunta, setNoGuardarPregunta] = useState(true);
+  const [fechaRegistro, setFechaRegistro] = useState(hoyISO());
   const chatEnd = useRef<HTMLDivElement>(null);
   const fotoInput = useRef<HTMLInputElement>(null);
 
@@ -139,7 +148,7 @@ export default function Home() {
   useEffect(() => { chatEnd.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, loading]);
 
   const selectedInfo = composteras.find((c) => c.id === parseInt(compostera));
-  const diaActual = selectedInfo?.fecha_inicio ? diasDesde(selectedInfo.fecha_inicio.split("T")[0]) : null;
+  const diaActual = selectedInfo?.fecha_inicio ? diasDesde(selectedInfo.fecha_inicio.split("T")[0], fechaRegistro) : null;
   const activeComposteras = composteras.filter((c) => c.activa);
 
   function compressImage(file: File, maxWidth = 1200, quality = 0.7): Promise<File> {
@@ -202,6 +211,7 @@ export default function Home() {
           compostera: parseInt(compostera), dia: diaActual,
           temperatura: parseFloat(temp), ph: parseFloat(ph), humedad: parseFloat(hum),
           observaciones: obs || null, estado, foto_url: fotoUrl,
+          fecha: fechaRegistro !== hoyISO() ? fechaRegistro : null,
         }),
       });
       setSaveStatus(res.ok ? "ok" : "error");
@@ -298,6 +308,7 @@ export default function Home() {
     setTemp(""); setPh(""); setHum(""); setObs(""); setFreeQuestion("");
     clearFoto();
     setDatosGuardados(false);
+    setFechaRegistro(hoyISO());
   }
 
   const canSubmit = temp !== "" && ph !== "" && hum !== "";
@@ -413,6 +424,22 @@ export default function Home() {
                     </option>
                   ))}
                 </select>
+              </div>
+
+              <div className="mb-4">
+                <label className="input-label">Fecha del registro</label>
+                <input
+                  type="date"
+                  value={fechaRegistro}
+                  max={hoyISO()}
+                  onChange={(e) => setFechaRegistro(e.target.value || hoyISO())}
+                  className="input-field"
+                />
+                {fechaRegistro !== hoyISO() && (
+                  <div className="text-[11px] text-tierra-600 font-medium mt-1.5">
+                    Registro con fecha atrasada
+                  </div>
+                )}
               </div>
 
               {diaActual !== null && (

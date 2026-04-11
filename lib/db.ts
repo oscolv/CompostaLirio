@@ -54,8 +54,17 @@ export async function insertMedicion(data: {
   observaciones: string | null;
   estado: string;
   foto_url: string | null;
+  created_at?: string | null;
 }) {
   const sql = getSQL();
+  if (data.created_at) {
+    const result = await sql`
+      INSERT INTO mediciones (compostera, dia, temperatura, ph, humedad, observaciones, estado, foto_url, created_at)
+      VALUES (${data.compostera}, ${data.dia}, ${data.temperatura}, ${data.ph}, ${data.humedad}, ${data.observaciones}, ${data.estado}, ${data.foto_url}, ${data.created_at})
+      RETURNING id, created_at
+    `;
+    return result[0];
+  }
   const result = await sql`
     INSERT INTO mediciones (compostera, dia, temperatura, ph, humedad, observaciones, estado, foto_url)
     VALUES (${data.compostera}, ${data.dia}, ${data.temperatura}, ${data.ph}, ${data.humedad}, ${data.observaciones}, ${data.estado}, ${data.foto_url})

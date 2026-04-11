@@ -15,6 +15,7 @@ export async function POST(req: NextRequest) {
       observaciones: body.observaciones || null,
       estado: body.estado || "good",
       foto_url: body.foto_url || null,
+      created_at: body.fecha || null,
     });
     return NextResponse.json(result);
   } catch (e: unknown) {

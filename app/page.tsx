@@ -114,8 +114,16 @@ function IconLeaf() {
   );
 }
 
+function IconChart() {
+  return (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5m.75-9l3-1.5m-3 1.5l-3-1.5M9 11.25v1.5M12 9v3.75m3-6v6" />
+    </svg>
+  );
+}
+
 export default function Home() {
-  const [mode, setMode] = useState<"select" | "registro" | "pregunta" | "chat">("select");
+  const [mode, setMode] = useState<"select" | "registro" | "pregunta" | "chat" | "diagnostico-historico">("select");
   const [composteras, setComposteras] = useState<ComposteraInfo[]>([]);
   const [compostera, setCompostera] = useState("1");
   const [temp, setTemp] = useState("");
@@ -132,6 +140,9 @@ export default function Home() {
   const [fotoUploading, setFotoUploading] = useState(false);
   const [datosGuardados, setDatosGuardados] = useState(false);
   const [noGuardarPregunta, setNoGuardarPregunta] = useState(true);
+  const [diagCompostera, setDiagCompostera] = useState("1");
+  const [diagLoading, setDiagLoading] = useState(false);
+  const [diagError, setDiagError] = useState("");
   const [fechaRegistro, setFechaRegistro] = useState(hoyISO());
   const chatEnd = useRef<HTMLDivElement>(null);
   const fotoInput = useRef<HTMLInputElement>(null);
@@ -301,6 +312,32 @@ export default function Home() {
     callAgent(q, newMsgs);
   }
 
+  async function handleDiagnosticoHistorico() {
+    setDiagLoading(true);
+    setDiagError("");
+    try {
+      const res = await fetch("/api/diagnostico", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ compostera: parseInt(diagCompostera) }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setDiagError(data.error || "Error al obtener diagnóstico.");
+        setDiagLoading(false);
+        return;
+      }
+      setMessages([
+        { role: "user", content: `Diagnóstico histórico de compostera #${diagCompostera}` },
+        { role: "assistant", content: data.reply },
+      ]);
+      setMode("chat");
+    } catch {
+      setDiagError("Error de conexión. Verifica tu internet.");
+    }
+    setDiagLoading(false);
+  }
+
   function resetAll() {
     setMode("select");
     setMessages([]);
@@ -391,6 +428,23 @@ export default function Home() {
                 </div>
                 <div className="text-[13px] text-gray-400 leading-snug">
                   Consultar sobre compostaje sin registrar datos
+                </div>
+              </div>
+            </button>
+
+            <button
+              onClick={() => setMode("diagnostico-historico")}
+              className="page-card flex items-start gap-4 text-left transition-shadow duration-200 hover:shadow-card-hover active:scale-[0.98]"
+            >
+              <div className="mt-0.5 flex-shrink-0 w-10 h-10 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center">
+                <IconChart />
+              </div>
+              <div>
+                <div className="text-[15px] font-semibold text-gray-800 mb-0.5">
+                  Diagnosticar compostera
+                </div>
+                <div className="text-[13px] text-gray-400 leading-snug">
+                  Analizar todo el historial de una compostera
                 </div>
               </div>
             </button>
@@ -614,6 +668,55 @@ export default function Home() {
                   </button>
                 ))}
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* ---- DIAGNOSTICO HISTORICO MODE ---- */}
+        {mode === "diagnostico-historico" && (
+          <div className="animate-fade-in">
+            <button onClick={resetAll} className="flex items-center gap-1.5 text-verde-700 font-semibold text-[13px] mb-4 active:opacity-70 transition-opacity">
+              <IconArrowLeft /> Volver
+            </button>
+
+            <div className="page-card">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center">
+                  <IconChart />
+                </div>
+                <h2 className="text-[15px] font-semibold text-gray-800">Diagnosticar compostera</h2>
+              </div>
+              <p className="text-[13px] text-gray-400 mb-4">
+                Analiza todo el historial de mediciones y genera un diagn&oacute;stico integral.
+              </p>
+
+              <div className="mb-4">
+                <label className="input-label">Compostera</label>
+                <select value={diagCompostera} onChange={(e) => setDiagCompostera(e.target.value)} className="input-field">
+                  {(activeComposteras.length > 0
+                    ? activeComposteras
+                    : Array.from({ length: 10 }, (_, i) => ({ id: i + 1, nombre: null } as ComposteraInfo))
+                  ).map((c) => (
+                    <option key={c.id} value={c.id}>
+                      #{c.id}{c.nombre ? ` \u2014 ${c.nombre}` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {diagError && (
+                <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl mb-3 text-[13px] font-semibold text-red-700 bg-red-50 ring-1 ring-red-200 animate-fade-in">
+                  {diagError}
+                </div>
+              )}
+
+              <button
+                onClick={handleDiagnosticoHistorico}
+                disabled={diagLoading}
+                className="btn-primary"
+              >
+                {diagLoading ? "Analizando historial..." : "Generar diagn\u00f3stico"}
+              </button>
             </div>
           </div>
         )}

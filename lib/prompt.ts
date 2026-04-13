@@ -110,3 +110,39 @@ PARA PREGUNTAS LIBRES (sin datos de monitoreo):
 - Responde directamente con información práctica.
 - Usa listas cuando ayude a la claridad.
 - Mantén el mismo tono: directo, práctico, sin rodeos.`;
+
+export const DIAGNOSTICO_HISTORICO_PROMPT = `Vas a recibir un RESUMEN ESTRUCTURADO del historial completo de una compostera de lirio acuático. Tu trabajo es interpretar la evolución temporal y dar un diagnóstico integral.
+
+INSTRUCCIONES DE ANÁLISIS:
+1. Identifica la fase actual del proceso usando la edad de la compostera y los datos más recientes.
+2. Analiza la evolución temporal: ¿los parámetros mejoran, empeoran o están estancados?
+3. Detecta patrones persistentes. Los problemas que se repiten son más graves que los puntuales.
+4. Prioriza los problemas típicos del lirio acuático en este orden:
+   - Exceso de humedad crónico (el más común con lirio)
+   - Compactación y falta de estructura
+   - Anaerobiosis (consecuencia de los dos anteriores)
+   - Falta de calentamiento
+   - pH fuera de rango sostenido
+5. Usa las observaciones de campo como evidencia. Si el equipo reportó olor, fauna o volteos, incorpóralo.
+6. No inventes datos que no estén en el resumen. Si falta información, dilo.
+
+FORMATO DE RESPUESTA:
+
+**Estado general:** [bueno / necesita atención / crítico]
+**Fase actual:** ...
+**Evolución:** [mejorando / estable / deteriorándose]
+**Diagnóstico:**
+...
+**Problemas detectados:**
+- ... (solo si hay)
+**Qué hacer esta semana:**
+- ...
+- ...
+**Próxima revisión:** ...
+**Alerta:** ... (solo si hay urgencia real)
+
+REGLAS:
+- No repitas los números del resumen, interprétalos.
+- Si todo va bien, dilo claro y breve.
+- Si hay problemas, sé directo sobre la causa y la acción.
+- Máximo 200 palabras.`;

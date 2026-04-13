@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 
 type Medicion = {
@@ -51,6 +51,12 @@ export default function Historial() {
     compostera: number; dia: string; temperatura: string; ph: string; humedad: string; observaciones: string;
   }>({ compostera: 1, dia: "", temperatura: "", ph: "", humedad: "", observaciones: "" });
   const [saving, setSaving] = useState(false);
+  const [editFoto, setEditFoto] = useState<File | null>(null);
+  const [editFotoPreview, setEditFotoPreview] = useState("");
+  const [editFotoExisting, setEditFotoExisting] = useState<string | null>(null);
+  const [editFotoRemoved, setEditFotoRemoved] = useState(false);
+  const [editFotoUploading, setEditFotoUploading] = useState(false);
+  const editFotoInput = useRef<HTMLInputElement>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -94,12 +100,54 @@ export default function Historial() {
       humedad: m.humedad.toString(),
       observaciones: m.observaciones ?? "",
     });
+    setEditFoto(null);
+    setEditFotoPreview("");
+    setEditFotoExisting(m.foto_url);
+    setEditFotoRemoved(false);
     setExpandido(m.id);
     setConfirmDelete(null);
   }
 
   function cancelEdit() {
     setEditando(null);
+    setEditFoto(null);
+    setEditFotoPreview("");
+    setEditFotoRemoved(false);
+  }
+
+  function compressImage(file: File, maxWidth = 1200, quality = 0.7): Promise<File> {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        let w = img.width, h = img.height;
+        if (w > maxWidth) { h = (h * maxWidth) / w; w = maxWidth; }
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext("2d")!.drawImage(img, 0, 0, w, h);
+        canvas.toBlob(
+          (blob) => resolve(new File([blob!], file.name, { type: "image/jpeg" })),
+          "image/jpeg",
+          quality,
+        );
+      };
+      img.src = URL.createObjectURL(file);
+    });
+  }
+
+  function handleEditFoto(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setEditFoto(file);
+    setEditFotoPreview(URL.createObjectURL(file));
+    setEditFotoRemoved(false);
+  }
+
+  function clearEditFoto() {
+    setEditFoto(null);
+    setEditFotoPreview("");
+    setEditFotoRemoved(true);
+    if (editFotoInput.current) editFotoInput.current.value = "";
   }
 
   function getEstado(temp: number, ph: number, hum: number): string {
@@ -116,6 +164,23 @@ export default function Historial() {
 
     setSaving(true);
     try {
+      // Upload new photo if selected
+      let fotoUrl: string | null | undefined = undefined;
+      if (editFoto) {
+        setEditFotoUploading(true);
+        const compressed = await compressImage(editFoto);
+        const formData = new FormData();
+        formData.append("foto", compressed);
+        const uploadRes = await fetch("/api/upload", { method: "POST", body: formData });
+        setEditFotoUploading(false);
+        if (uploadRes.ok) {
+          const data = await uploadRes.json();
+          fotoUrl = data.url;
+        }
+      } else if (editFotoRemoved) {
+        fotoUrl = null;
+      }
+
       const estado = getEstado(t, p, h);
       const res = await fetch("/api/mediciones", {
         method: "PUT",
@@ -129,12 +194,16 @@ export default function Historial() {
           humedad: h,
           observaciones: editForm.observaciones || null,
           estado,
+          ...(fotoUrl !== undefined ? { foto_url: fotoUrl } : {}),
         }),
       });
       if (res.ok) {
         const updated = await res.json();
         setMediciones((prev) => prev.map((m) => m.id === id ? { ...m, ...updated } : m));
         setEditando(null);
+        setEditFoto(null);
+        setEditFotoPreview("");
+        setEditFotoRemoved(false);
       }
     } catch { /* ignore */ }
     setSaving(false);
@@ -381,6 +450,67 @@ export default function Historial() {
                         placeholder="Opcional"
                         className="input-field text-[13px] py-2"
                       />
+                    </div>
+                    <div className="mb-3">
+                      <label className="text-[10px] font-semibold text-gray-500 uppercase">Foto</label>
+                      <input
+                        ref={editFotoInput}
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        onChange={handleEditFoto}
+                        className="hidden"
+                      />
+                      {editFotoPreview ? (
+                        <div className="relative mt-1">
+                          <img src={editFotoPreview} alt="Preview" className="w-full h-32 object-cover rounded-xl" />
+                          <button
+                            onClick={clearEditFoto}
+                            className="absolute top-1.5 right-1.5 w-6 h-6 bg-black/50 text-white rounded-full text-[14px] flex items-center justify-center"
+                          >
+                            &times;
+                          </button>
+                          {editFotoUploading && (
+                            <div className="absolute bottom-2 left-2 bg-white/90 rounded-full px-3 py-1">
+                              <span className="text-[11px] font-semibold text-verde-700 animate-pulse-fade">Subiendo foto...</span>
+                            </div>
+                          )}
+                        </div>
+                      ) : !editFotoRemoved && editFotoExisting ? (
+                        <div className="relative mt-1">
+                          <img src={editFotoExisting} alt="Foto actual" className="w-full h-32 object-cover rounded-xl" />
+                          <div className="absolute top-1.5 right-1.5 flex gap-1">
+                            <button
+                              onClick={() => editFotoInput.current?.click()}
+                              className="w-6 h-6 bg-black/50 text-white rounded-full text-[11px] flex items-center justify-center"
+                              title="Cambiar foto"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
+                              </svg>
+                            </button>
+                            <button
+                              onClick={clearEditFoto}
+                              className="w-6 h-6 bg-black/50 text-white rounded-full text-[14px] flex items-center justify-center"
+                              title="Quitar foto"
+                            >
+                              &times;
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => editFotoInput.current?.click()}
+                          className="mt-1 w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed border-verde-200 text-verde-600 text-[12px] font-medium hover:bg-verde-50/50 transition-colors"
+                        >
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
+                          </svg>
+                          {editFotoRemoved ? "Agregar foto" : "Tomar o cargar foto"}
+                        </button>
+                      )}
                     </div>
                     <div className="flex gap-2">
                       <button

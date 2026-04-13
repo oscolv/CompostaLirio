@@ -65,6 +65,18 @@ export async function PUT(req: NextRequest) {
     if (!id) {
       return NextResponse.json({ error: "Falta el ID" }, { status: 400 });
     }
+    // If a new photo is set and there was an old one, delete the old blob
+    if (body.foto_url !== undefined) {
+      const existing = await getMedicionById(id);
+      if (existing?.foto_url && existing.foto_url !== body.foto_url) {
+        try {
+          await del(existing.foto_url);
+        } catch {
+          console.error("[mediciones] Failed to delete old blob:", existing.foto_url);
+        }
+      }
+    }
+
     const result = await updateMedicion(id, {
       compostera: body.compostera,
       dia: body.dia || null,
@@ -73,6 +85,7 @@ export async function PUT(req: NextRequest) {
       humedad: body.humedad,
       observaciones: body.observaciones || null,
       estado: body.estado || "good",
+      ...(body.foto_url !== undefined ? { foto_url: body.foto_url } : {}),
     });
     if (!result) {
       return NextResponse.json({ error: "Medición no encontrada" }, { status: 404 });

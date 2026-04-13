@@ -120,19 +120,35 @@ export async function updateMedicion(id: number, data: {
   humedad: number;
   observaciones: string | null;
   estado: string;
+  foto_url?: string | null;
 }) {
   const sql = getSQL();
-  await sql`
-    UPDATE mediciones SET
-      compostera = ${data.compostera},
-      dia = ${data.dia},
-      temperatura = ${data.temperatura},
-      ph = ${data.ph},
-      humedad = ${data.humedad},
-      observaciones = ${data.observaciones},
-      estado = ${data.estado}
-    WHERE id = ${id}
-  `;
+  if (data.foto_url !== undefined) {
+    await sql`
+      UPDATE mediciones SET
+        compostera = ${data.compostera},
+        dia = ${data.dia},
+        temperatura = ${data.temperatura},
+        ph = ${data.ph},
+        humedad = ${data.humedad},
+        observaciones = ${data.observaciones},
+        estado = ${data.estado},
+        foto_url = ${data.foto_url}
+      WHERE id = ${id}
+    `;
+  } else {
+    await sql`
+      UPDATE mediciones SET
+        compostera = ${data.compostera},
+        dia = ${data.dia},
+        temperatura = ${data.temperatura},
+        ph = ${data.ph},
+        humedad = ${data.humedad},
+        observaciones = ${data.observaciones},
+        estado = ${data.estado}
+      WHERE id = ${id}
+    `;
+  }
   const rows = await sql`SELECT * FROM mediciones WHERE id = ${id}`;
   return rows[0] || null;
 }

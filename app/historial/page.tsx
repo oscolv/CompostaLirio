@@ -46,6 +46,11 @@ export default function Historial() {
   const [expandido, setExpandido] = useState<number | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
   const [deleting, setDeleting] = useState<number | null>(null);
+  const [editando, setEditando] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState<{
+    compostera: number; dia: string; temperatura: string; ph: string; humedad: string; observaciones: string;
+  }>({ compostera: 1, dia: "", temperatura: "", ph: "", humedad: "", observaciones: "" });
+  const [saving, setSaving] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -77,6 +82,62 @@ export default function Historial() {
     } catch { /* ignore */ }
     setDeleting(null);
     setConfirmDelete(null);
+  }
+
+  function startEdit(m: Medicion) {
+    setEditando(m.id);
+    setEditForm({
+      compostera: m.compostera,
+      dia: m.dia?.toString() ?? "",
+      temperatura: m.temperatura.toString(),
+      ph: m.ph.toString(),
+      humedad: m.humedad.toString(),
+      observaciones: m.observaciones ?? "",
+    });
+    setExpandido(m.id);
+    setConfirmDelete(null);
+  }
+
+  function cancelEdit() {
+    setEditando(null);
+  }
+
+  function getEstado(temp: number, ph: number, hum: number): string {
+    if (temp < 25 || temp > 70 || ph < 4.5 || ph > 9 || hum < 35 || hum > 80) return "danger";
+    if (temp < 40 || temp > 65 || ph < 5.5 || ph > 8.5 || hum < 45 || hum > 70) return "warning";
+    return "good";
+  }
+
+  async function handleSaveEdit(id: number) {
+    const t = parseFloat(editForm.temperatura);
+    const p = parseFloat(editForm.ph);
+    const h = parseFloat(editForm.humedad);
+    if (isNaN(t) || isNaN(p) || isNaN(h)) return;
+
+    setSaving(true);
+    try {
+      const estado = getEstado(t, p, h);
+      const res = await fetch("/api/mediciones", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id,
+          compostera: editForm.compostera,
+          dia: editForm.dia ? parseInt(editForm.dia) : null,
+          temperatura: t,
+          ph: p,
+          humedad: h,
+          observaciones: editForm.observaciones || null,
+          estado,
+        }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setMediciones((prev) => prev.map((m) => m.id === id ? { ...m, ...updated } : m));
+        setEditando(null);
+      }
+    } catch { /* ignore */ }
+    setSaving(false);
   }
 
   function downloadCSV() {
@@ -166,7 +227,7 @@ export default function Historial() {
             return (
               <div
                 key={m.id}
-                onClick={() => { if (confirmDelete !== m.id) setExpandido(isOpen ? null : m.id); }}
+                onClick={() => { if (confirmDelete !== m.id && editando !== m.id) setExpandido(isOpen ? null : m.id); }}
                 className={`rounded-2xl p-4 border shadow-card cursor-pointer transition-shadow hover:shadow-card-hover ${est.bg} ${est.border}`}
               >
                 <div className="flex items-center justify-between mb-3">
@@ -216,8 +277,27 @@ export default function Historial() {
                     )}
                   </div>
                 )}
-                {isOpen && (
-                  <div className="mt-3 pt-3 border-t border-black/5 flex justify-end animate-fade-in">
+                {isOpen && editando !== m.id && (
+                  <div className="mt-3 pt-3 border-t border-black/5 flex items-center justify-between animate-fade-in">
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); startEdit(m); }}
+                        className="px-3 py-1.5 rounded-lg text-[12px] font-semibold bg-verde-50 text-verde-700 hover:bg-verde-100 transition-all"
+                      >
+                        Editar
+                      </button>
+                      {m.foto_url && (
+                        <a
+                          href={m.foto_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="px-3 py-1.5 rounded-lg text-[12px] font-semibold bg-blue-50 text-blue-600 hover:bg-blue-100 transition-all"
+                        >
+                          Ver foto
+                        </a>
+                      )}
+                    </div>
                     <button
                       onClick={(e) => { e.stopPropagation(); handleDelete(m.id); }}
                       disabled={deleting === m.id}
@@ -229,6 +309,94 @@ export default function Historial() {
                     >
                       {deleting === m.id ? "Borrando..." : confirmDelete === m.id ? "Confirmar borrar" : "Borrar registro"}
                     </button>
+                  </div>
+                )}
+                {editando === m.id && (
+                  <div className="mt-3 pt-3 border-t border-black/5 animate-fade-in" onClick={(e) => e.stopPropagation()}>
+                    <div className="text-[12px] font-semibold text-verde-700 uppercase tracking-wider mb-3">
+                      Editar registro
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 mb-2">
+                      <div>
+                        <label className="text-[10px] font-semibold text-gray-500 uppercase">Compostera</label>
+                        <select
+                          value={editForm.compostera}
+                          onChange={(e) => setEditForm({ ...editForm, compostera: parseInt(e.target.value) })}
+                          className="input-field text-[13px] py-2"
+                        >
+                          {Array.from({ length: 10 }, (_, i) => (
+                            <option key={i + 1} value={i + 1}>#{i + 1}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-semibold text-gray-500 uppercase">D&iacute;a</label>
+                        <input
+                          type="number"
+                          value={editForm.dia}
+                          onChange={(e) => setEditForm({ ...editForm, dia: e.target.value })}
+                          placeholder="—"
+                          className="input-field text-[13px] py-2"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 mb-2">
+                      <div>
+                        <label className="text-[10px] font-semibold text-gray-500 uppercase">Temp &deg;C</label>
+                        <input
+                          type="number"
+                          step="0.1"
+                          value={editForm.temperatura}
+                          onChange={(e) => setEditForm({ ...editForm, temperatura: e.target.value })}
+                          className="input-field text-[13px] py-2 text-center"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-semibold text-gray-500 uppercase">pH</label>
+                        <input
+                          type="number"
+                          step="0.1"
+                          value={editForm.ph}
+                          onChange={(e) => setEditForm({ ...editForm, ph: e.target.value })}
+                          className="input-field text-[13px] py-2 text-center"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-semibold text-gray-500 uppercase">Humedad %</label>
+                        <input
+                          type="number"
+                          step="1"
+                          value={editForm.humedad}
+                          onChange={(e) => setEditForm({ ...editForm, humedad: e.target.value })}
+                          className="input-field text-[13px] py-2 text-center"
+                        />
+                      </div>
+                    </div>
+                    <div className="mb-3">
+                      <label className="text-[10px] font-semibold text-gray-500 uppercase">Observaciones</label>
+                      <input
+                        type="text"
+                        value={editForm.observaciones}
+                        onChange={(e) => setEditForm({ ...editForm, observaciones: e.target.value })}
+                        placeholder="Opcional"
+                        className="input-field text-[13px] py-2"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleSaveEdit(m.id)}
+                        disabled={saving || !editForm.temperatura || !editForm.ph || !editForm.humedad}
+                        className="flex-1 py-2 rounded-lg text-[12px] font-semibold bg-verde-700 text-white transition-all active:scale-[0.98] disabled:bg-gray-300"
+                      >
+                        {saving ? "Guardando..." : "Guardar cambios"}
+                      </button>
+                      <button
+                        onClick={cancelEdit}
+                        className="px-4 py-2 rounded-lg text-[12px] font-semibold bg-gray-100 text-gray-600 hover:bg-gray-200 transition-all"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>

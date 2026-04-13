@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ensureTable, insertMedicion, getMediciones, getMedicionById, deleteMedicion } from "@/lib/db";
+import { ensureTable, insertMedicion, getMediciones, getMedicionById, deleteMedicion, updateMedicion } from "@/lib/db";
 import { del } from "@vercel/blob";
 
 export async function POST(req: NextRequest) {
@@ -51,6 +51,33 @@ export async function DELETE(req: NextRequest) {
 
     await deleteMedicion(parseInt(id));
     return NextResponse.json({ ok: true });
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : "Unknown error";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+export async function PUT(req: NextRequest) {
+  try {
+    await ensureTable();
+    const body = await req.json();
+    const id = body.id;
+    if (!id) {
+      return NextResponse.json({ error: "Falta el ID" }, { status: 400 });
+    }
+    const result = await updateMedicion(id, {
+      compostera: body.compostera,
+      dia: body.dia || null,
+      temperatura: body.temperatura,
+      ph: body.ph,
+      humedad: body.humedad,
+      observaciones: body.observaciones || null,
+      estado: body.estado || "good",
+    });
+    if (!result) {
+      return NextResponse.json({ error: "Medición no encontrada" }, { status: 404 });
+    }
+    return NextResponse.json(result);
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });

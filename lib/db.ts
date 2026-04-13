@@ -112,6 +112,31 @@ export async function getMedicionById(id: number) {
   return rows[0] || null;
 }
 
+export async function updateMedicion(id: number, data: {
+  compostera: number;
+  dia: number | null;
+  temperatura: number;
+  ph: number;
+  humedad: number;
+  observaciones: string | null;
+  estado: string;
+}) {
+  const sql = getSQL();
+  await sql`
+    UPDATE mediciones SET
+      compostera = ${data.compostera},
+      dia = ${data.dia},
+      temperatura = ${data.temperatura},
+      ph = ${data.ph},
+      humedad = ${data.humedad},
+      observaciones = ${data.observaciones},
+      estado = ${data.estado}
+    WHERE id = ${id}
+  `;
+  const rows = await sql`SELECT * FROM mediciones WHERE id = ${id}`;
+  return rows[0] || null;
+}
+
 export async function deleteMedicion(id: number) {
   const sql = getSQL();
   await sql`DELETE FROM mediciones WHERE id = ${id}`;

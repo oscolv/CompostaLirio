@@ -209,22 +209,23 @@ export default function Historial() {
     setSaving(false);
   }
 
-  function downloadCSV() {
-    if (mediciones.length === 0) return;
-    const header = "ID,Compostera,Dia,Temperatura,pH,Humedad,Estado,Observaciones,Fecha";
-    const rows = mediciones.map((m) => {
-      const fecha = new Date(m.created_at).toLocaleString("es-MX");
-      const obs = (m.observaciones || "").replace(/"/g, '""');
-      return `${m.id},${m.compostera},${m.dia ?? ""},${m.temperatura},${m.ph},${m.humedad},${m.estado},"${obs}","${fecha}"`;
-    });
-    const csv = [header, ...rows].join("\n");
-    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `composta-lirio-mediciones${filtro ? `-compostera-${filtro}` : ""}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const [downloading, setDownloading] = useState(false);
+
+  async function downloadCSV() {
+    setDownloading(true);
+    try {
+      const params = filtro ? `?compostera=${filtro}` : "";
+      const res = await fetch(`/api/mediciones/export${params}`);
+      if (!res.ok) throw new Error();
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `composta-lirio-mediciones${filtro ? `-compostera-${filtro}` : ""}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch { /* ignore */ }
+    setDownloading(false);
   }
 
   return (
@@ -262,11 +263,11 @@ export default function Historial() {
           </select>
           <button
             onClick={downloadCSV}
-            disabled={mediciones.length === 0}
+            disabled={downloading}
             className="flex items-center gap-1.5 px-4 py-3 rounded-xl bg-verde-700 text-white text-[13px] font-semibold shadow-card transition-all active:scale-95 disabled:bg-gray-300 disabled:shadow-none"
           >
             <IconDownload />
-            CSV
+            {downloading ? "Descargando..." : "CSV"}
           </button>
         </div>
 

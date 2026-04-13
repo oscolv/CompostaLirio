@@ -86,6 +86,18 @@ export async function getMediciones(compostera?: number) {
   return sql`SELECT * FROM mediciones ORDER BY created_at DESC LIMIT 100`;
 }
 
+export async function getMedicionesExport(compostera?: number) {
+  const sql = getSQL();
+  if (compostera) {
+    return sql`
+      SELECT * FROM mediciones
+      WHERE compostera = ${compostera}
+      ORDER BY created_at ASC
+    `;
+  }
+  return sql`SELECT * FROM mediciones ORDER BY created_at ASC`;
+}
+
 export async function getComposteras() {
   const sql = getSQL();
   return sql`SELECT * FROM composteras ORDER BY id`;

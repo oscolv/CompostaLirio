@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
 
     const header = "ID,Compostera,Dia,Temperatura,pH,Humedad,Estado,Observaciones,Fecha";
     const lines = rows.map((m) => {
-      const fecha = new Date(m.created_at as string).toLocaleString("es-MX");
+      const fecha = new Date(m.created_at as string).toLocaleString("es-MX", { timeZone: "America/Mexico_City" });
       return [
         String(m.id),
         String(m.compostera),

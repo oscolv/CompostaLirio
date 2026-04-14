@@ -139,6 +139,19 @@ export default function Configuracion() {
       </header>
 
       <main className="max-w-[480px] mx-auto px-4 py-5">
+        <Link
+          href="/configuracion/formulaciones"
+          className="page-card flex items-center justify-between mb-4 transition-shadow hover:shadow-card-hover active:scale-[0.98]"
+        >
+          <div>
+            <div className="text-[15px] font-semibold text-verde-900">Formulaciones</div>
+            <div className="text-[12px] text-gray-400 leading-snug">
+              Gestionar recetas de mezcla de composta
+            </div>
+          </div>
+          <span className="text-verde-700 text-xl leading-none">→</span>
+        </Link>
+
         <div className="page-card">
           <h2 className="text-[15px] font-semibold text-verde-900 mb-1">Composteras</h2>
           <p className="text-[13px] text-gray-400 mb-5 leading-snug">

@@ -171,15 +171,29 @@ export default function Historial() {
       let fotoUrl: string | null | undefined = undefined;
       if (editFoto) {
         setEditFotoUploading(true);
-        const compressed = await compressImage(editFoto);
-        const formData = new FormData();
-        formData.append("foto", compressed);
-        const uploadRes = await fetch("/api/upload", { method: "POST", body: formData });
-        setEditFotoUploading(false);
-        if (uploadRes.ok) {
+        try {
+          const compressed = await compressImage(editFoto);
+          const formData = new FormData();
+          formData.append("foto", compressed);
+          const uploadRes = await fetch("/api/upload", { method: "POST", body: formData });
+          if (!uploadRes.ok) {
+            const data = await uploadRes.json().catch(() => ({ error: "Error al subir la foto" }));
+            throw new Error(data?.error || `Error ${uploadRes.status} al subir la foto`);
+          }
           const data = await uploadRes.json();
+          if (!data?.url) throw new Error("El servidor no devolvió la URL de la foto");
           fotoUrl = data.url;
+        } catch (e) {
+          setEditFotoUploading(false);
+          setSaving(false);
+          alert(
+            e instanceof Error
+              ? `No se pudo subir la foto: ${e.message}`
+              : "No se pudo subir la foto.",
+          );
+          return;
         }
+        setEditFotoUploading(false);
       } else if (editFotoRemoved) {
         fotoUrl = null;
       }

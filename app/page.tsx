@@ -204,11 +204,13 @@ export default function Home() {
       const formData = new FormData();
       formData.append("foto", compressed);
       const res = await fetch("/api/upload", { method: "POST", body: formData });
-      if (!res.ok) return null;
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({ error: "Error al subir la foto" }));
+        throw new Error(data?.error || `Error ${res.status} al subir la foto`);
+      }
       const data = await res.json();
+      if (!data?.url) throw new Error("El servidor no devolvió la URL de la foto");
       return data.url;
-    } catch {
-      return null;
     } finally {
       setFotoUploading(false);
     }
@@ -276,7 +278,17 @@ export default function Home() {
     // Upload photo first if present
     let fotoUrl: string | null = null;
     if (foto) {
-      fotoUrl = await uploadFoto();
+      try {
+        fotoUrl = await uploadFoto();
+      } catch (e) {
+        setValidationError(
+          e instanceof Error
+            ? `No se pudo subir la foto: ${e.message}. Quita la foto para guardar sin ella, o intenta de nuevo.`
+            : "No se pudo subir la foto.",
+        );
+        setLoading(false);
+        return;
+      }
     }
 
     const saved = await saveMedicion(status.key, fotoUrl);

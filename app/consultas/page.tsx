@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import NextImage from "next/image";
 import Markdown from "react-markdown";
 
 type Consulta = {
@@ -83,22 +84,28 @@ export default function Consultas() {
 
   return (
     <div className="min-h-screen bg-crema-100">
-      <header className="bg-gradient-to-br from-verde-800 to-verde-950 px-5 py-6 text-white relative overflow-hidden">
-        <div className="absolute -top-8 -right-4 text-[140px] opacity-[0.06] leading-none select-none rotate-12">
-          {"\u{1F4AC}"}
-        </div>
-        <div className="relative">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-verde-200 mb-1.5">
-            San Francisco Bojay
+      <header className="relative overflow-hidden text-white h-[26vh] min-h-[150px] max-h-[200px]">
+        <NextImage
+          src="/bojay.jpg"
+          alt="Ciénega de San Francisco Bojay"
+          fill
+          priority
+          sizes="(max-width: 480px) 100vw, 480px"
+          className="object-cover"
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-verde-950/70 via-verde-900/55 to-verde-950/85" />
+        <div className="relative z-10 h-full max-w-[480px] mx-auto px-5 py-4 flex flex-col justify-between">
+          <div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-verde-100 drop-shadow-sm">
+              San Francisco Bojay
+            </div>
+            <h1 className="font-display text-[26px] font-black leading-tight tracking-tight mt-0.5 drop-shadow">
+              Consultas
+            </h1>
           </div>
-          <h1 className="font-display text-[28px] font-black leading-tight tracking-tight">
-            Consultas
-          </h1>
-          <div className="mt-3">
-            <Link href="/" className="flex items-center gap-1.5 text-[13px] font-medium text-verde-200 hover:text-white transition-colors">
-              <IconArrowLeft /> Volver al monitor
-            </Link>
-          </div>
+          <Link href="/" className="flex items-center gap-1.5 text-[13px] font-medium text-verde-100 hover:text-white transition-colors">
+            <IconArrowLeft /> Volver al monitor
+          </Link>
         </div>
       </header>
 

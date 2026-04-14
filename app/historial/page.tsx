@@ -3,42 +3,15 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import NextImage from "next/image";
-import { analizarImagen, type AnalizarResponse } from "@/lib/analizar";
-
-type Medicion = {
-  id: number;
-  compostera: number;
-  dia: number | null;
-  temperatura: number;
-  ph: number;
-  humedad: number;
-  observaciones: string | null;
-  estado: string;
-  foto_url: string | null;
-  created_at: string;
-};
-
-const estadoConfig: Record<string, { dot: string; bg: string; border: string }> = {
-  good: { dot: "bg-verde-500", bg: "bg-verde-50/50", border: "border-verde-200/60" },
-  warning: { dot: "bg-amber-500", bg: "bg-amber-50/50", border: "border-amber-200/60" },
-  danger: { dot: "bg-red-500", bg: "bg-red-50/50", border: "border-red-200/60" },
-};
-
-function IconArrowLeft() {
-  return (
-    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
-    </svg>
-  );
-}
-
-function IconDownload() {
-  return (
-    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
-    </svg>
-  );
-}
+import type { Medicion } from "@/lib/types";
+import { estadoCardConfig, getEstadoSimple } from "@/lib/estado";
+import { humedadLabel } from "@/lib/humedad";
+import { uploadFoto } from "@/lib/foto";
+import { IconArrowLeft, IconDownload, IconCamera } from "@/components/ui/icons";
+import { FotoModal } from "@/components/ui/FotoModal";
+import { AnalisisBadge } from "@/components/ui/AnalisisBadge";
+import { useImageAnalysis } from "@/hooks/useImageAnalysis";
+import { useFotoModal } from "@/hooks/useFotoModal";
 
 export default function Historial() {
   const [mediciones, setMediciones] = useState<Medicion[]>([]);
@@ -58,9 +31,7 @@ export default function Historial() {
   const [editFotoExisting, setEditFotoExisting] = useState<string | null>(null);
   const [editFotoRemoved, setEditFotoRemoved] = useState(false);
   const [editFotoUploading, setEditFotoUploading] = useState(false);
-  const [editAnalyzing, setEditAnalyzing] = useState(false);
-  const [editAnalyzeError, setEditAnalyzeError] = useState("");
-  const [editAnalisisData, setEditAnalisisData] = useState<AnalizarResponse | null>(null);
+  const editAnalysis = useImageAnalysis();
   const editFotoInput = useRef<HTMLInputElement>(null);
 
   const fetchData = useCallback(async () => {
@@ -120,12 +91,11 @@ export default function Historial() {
     setEditFoto(null);
     setEditFotoPreview("");
     setEditFotoRemoved(false);
-    setEditAnalyzeError("");
-    setEditAnalisisData(null);
+    editAnalysis.reset();
   }
 
   async function handleEditAnalizar() {
-    if (editAnalyzing) return;
+    if (editAnalysis.analyzing) return;
     let file: File | null = editFoto;
     if (!file && !editFotoRemoved && editFotoExisting) {
       try {
@@ -133,47 +103,20 @@ export default function Historial() {
         const blob = await r.blob();
         file = new File([blob], "existing.jpg", { type: blob.type || "image/jpeg" });
       } catch {
-        setEditAnalyzeError("No se pudo analizar la imagen");
+        editAnalysis.setError("No se pudo analizar la imagen");
         return;
       }
     }
     if (!file) return;
-    setEditAnalyzing(true);
-    setEditAnalyzeError("");
-    try {
-      const data = await analizarImagen(file);
-      setEditAnalisisData(data);
+    const data = await editAnalysis.analizar(file);
+    if (data) {
       setEditForm((prev) => ({
         ...prev,
         observaciones: prev.observaciones.trim()
           ? `${prev.observaciones.trim()} ${data.resultado}`
           : data.resultado,
       }));
-    } catch (e) {
-      setEditAnalyzeError(e instanceof Error ? e.message : "No se pudo analizar la imagen");
-    } finally {
-      setEditAnalyzing(false);
     }
-  }
-
-  function compressImage(file: File, maxWidth = 1200, quality = 0.7): Promise<File> {
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        let w = img.width, h = img.height;
-        if (w > maxWidth) { h = (h * maxWidth) / w; w = maxWidth; }
-        canvas.width = w;
-        canvas.height = h;
-        canvas.getContext("2d")!.drawImage(img, 0, 0, w, h);
-        canvas.toBlob(
-          (blob) => resolve(new File([blob!], file.name, { type: "image/jpeg" })),
-          "image/jpeg",
-          quality,
-        );
-      };
-      img.src = URL.createObjectURL(file);
-    });
   }
 
   function handleEditFoto(e: React.ChangeEvent<HTMLInputElement>) {
@@ -191,12 +134,6 @@ export default function Historial() {
     if (editFotoInput.current) editFotoInput.current.value = "";
   }
 
-  function getEstado(temp: number, ph: number, hum: number): string {
-    if (temp < 25 || temp > 70 || ph < 4.5 || ph > 9 || hum < 35 || hum > 80) return "danger";
-    if (temp < 40 || temp > 65 || ph < 5.5 || ph > 8.5 || hum < 45 || hum > 70) return "warning";
-    return "good";
-  }
-
   async function handleSaveEdit(id: number) {
     const t = parseFloat(editForm.temperatura);
     const p = parseFloat(editForm.ph);
@@ -210,17 +147,7 @@ export default function Historial() {
       if (editFoto) {
         setEditFotoUploading(true);
         try {
-          const compressed = await compressImage(editFoto);
-          const formData = new FormData();
-          formData.append("foto", compressed);
-          const uploadRes = await fetch("/api/upload", { method: "POST", body: formData });
-          if (!uploadRes.ok) {
-            const data = await uploadRes.json().catch(() => ({ error: "Error al subir la foto" }));
-            throw new Error(data?.error || `Error ${uploadRes.status} al subir la foto`);
-          }
-          const data = await uploadRes.json();
-          if (!data?.url) throw new Error("El servidor no devolvió la URL de la foto");
-          fotoUrl = data.url;
+          fotoUrl = await uploadFoto(editFoto);
         } catch (e) {
           setEditFotoUploading(false);
           setSaving(false);
@@ -236,7 +163,7 @@ export default function Historial() {
         fotoUrl = null;
       }
 
-      const estado = getEstado(t, p, h);
+      const estado = getEstadoSimple(t, p, h);
       const res = await fetch("/api/mediciones", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -265,19 +192,7 @@ export default function Historial() {
   }
 
   const [downloading, setDownloading] = useState(false);
-  const [fotoModal, setFotoModal] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!fotoModal) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setFotoModal(null); };
-    window.addEventListener("keydown", onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prev;
-    };
-  }, [fotoModal]);
+  const fotoModal = useFotoModal();
 
   async function downloadCSV() {
     setDownloading(true);
@@ -365,7 +280,7 @@ export default function Historial() {
 
         <div className="flex flex-col gap-3">
           {mediciones.map((m) => {
-            const est = estadoConfig[m.estado] || estadoConfig.good;
+            const est = estadoCardConfig[m.estado] || estadoCardConfig.good;
             const fecha = new Date(m.created_at);
             const isOpen = expandido === m.id;
             return (
@@ -394,7 +309,7 @@ export default function Historial() {
                   {[
                     { label: "Temp", value: `${m.temperatura}\u00b0C` },
                     { label: "pH", value: `${m.ph}` },
-                    { label: "Humedad", value: ({ 20: "DRY++", 30: "DRY+", 40: "DRY", 55: "WET", 70: "WET+", 85: "WET++" } as Record<number, string>)[m.humedad] || `${m.humedad}%` },
+                    { label: "Humedad", value: humedadLabel(m.humedad) },
                   ].map((d) => (
                     <div key={d.label} className="bg-white/60 rounded-lg px-2.5 py-2 text-center">
                       <div className="text-[10px] font-semibold text-verde-700/50 uppercase tracking-wider">{d.label}</div>
@@ -406,7 +321,7 @@ export default function Historial() {
                   <div className="mt-2.5">
                     <button
                       type="button"
-                      onClick={(e) => { e.stopPropagation(); setFotoModal(m.foto_url); }}
+                      onClick={(e) => { e.stopPropagation(); fotoModal.open(m.foto_url); }}
                       className="group relative w-20 h-20 rounded-lg overflow-hidden border border-white/60 shadow-sm active:scale-95 transition-transform"
                       aria-label="Ver foto en grande"
                     >
@@ -448,7 +363,7 @@ export default function Historial() {
                       {m.foto_url && (
                         <button
                           type="button"
-                          onClick={(e) => { e.stopPropagation(); setFotoModal(m.foto_url); }}
+                          onClick={(e) => { e.stopPropagation(); fotoModal.open(m.foto_url); }}
                           className="px-3 py-1.5 rounded-lg text-[12px] font-semibold bg-blue-50 text-blue-600 hover:bg-blue-100 transition-all"
                         >
                           Ver foto
@@ -551,6 +466,7 @@ export default function Historial() {
                       />
                       {editFotoPreview ? (
                         <div className="relative mt-1">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img src={editFotoPreview} alt="Preview" className="w-full h-32 object-cover rounded-xl" />
                           <button
                             onClick={clearEditFoto}
@@ -566,6 +482,7 @@ export default function Historial() {
                         </div>
                       ) : !editFotoRemoved && editFotoExisting ? (
                         <div className="relative mt-1">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img src={editFotoExisting} alt="Foto actual" className="w-full h-32 object-cover rounded-xl" />
                           <div className="absolute top-1.5 right-1.5 flex gap-1">
                             <button
@@ -573,10 +490,7 @@ export default function Historial() {
                               className="w-6 h-6 bg-black/50 text-white rounded-full text-[11px] flex items-center justify-center"
                               title="Cambiar foto"
                             >
-                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
-                              </svg>
+                              <IconCamera className="w-3.5 h-3.5" />
                             </button>
                             <button
                               onClick={clearEditFoto}
@@ -592,10 +506,7 @@ export default function Historial() {
                           onClick={() => editFotoInput.current?.click()}
                           className="mt-1 w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed border-verde-200 text-verde-600 text-[12px] font-medium hover:bg-verde-50/50 transition-colors"
                         >
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
-                          </svg>
+                          <IconCamera className="w-4 h-4" />
                           {editFotoRemoved ? "Agregar foto" : "Tomar o cargar foto"}
                         </button>
                       )}
@@ -605,38 +516,17 @@ export default function Historial() {
                         <button
                           type="button"
                           onClick={handleEditAnalizar}
-                          disabled={editAnalyzing}
+                          disabled={editAnalysis.analyzing}
                           className="w-full px-4 py-2 rounded-lg bg-verde-700 text-white text-[12px] font-semibold transition-all active:scale-[0.98] disabled:bg-gray-300"
                         >
-                          {editAnalyzing ? "Analizando..." : "Analizar imagen"}
+                          {editAnalysis.analyzing ? "Analizando..." : "Analizar imagen"}
                         </button>
-                        {editAnalyzeError && (
+                        {editAnalysis.error && (
                           <div className="mt-2 px-3 py-1.5 rounded-lg text-[11px] font-semibold text-red-700 bg-red-50 ring-1 ring-red-200">
-                            {editAnalyzeError}
+                            {editAnalysis.error}
                           </div>
                         )}
-                        {editAnalisisData?.estado && editAnalisisData?.accion && (
-                          <div
-                            className={`mt-2 px-3 py-1.5 rounded-lg text-[11px] font-semibold ring-1 flex items-center gap-2 ${
-                              editAnalisisData.estado === "verde"
-                                ? "text-verde-700 bg-verde-50 ring-verde-200"
-                                : editAnalisisData.estado === "amarillo"
-                                  ? "text-amber-700 bg-amber-50 ring-amber-200"
-                                  : "text-red-700 bg-red-50 ring-red-200"
-                            }`}
-                          >
-                            <span
-                              className={`w-1.5 h-1.5 rounded-full ${
-                                editAnalisisData.estado === "verde"
-                                  ? "bg-verde-500"
-                                  : editAnalisisData.estado === "amarillo"
-                                    ? "bg-amber-500"
-                                    : "bg-red-500"
-                              }`}
-                            />
-                            {editAnalisisData.accion}
-                          </div>
-                        )}
+                        <AnalisisBadge estado={editAnalysis.data?.estado} accion={editAnalysis.data?.accion} compact />
                       </div>
                     )}
                     <div className="flex gap-2">
@@ -662,38 +552,7 @@ export default function Historial() {
         </div>
       </main>
 
-      {fotoModal && (
-        <div
-          onClick={() => setFotoModal(null)}
-          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4 animate-fade-in"
-          role="dialog"
-          aria-modal="true"
-        >
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); setFotoModal(null); }}
-            className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 text-white text-2xl flex items-center justify-center hover:bg-white/20 transition-colors"
-            aria-label="Cerrar"
-          >
-            &times;
-          </button>
-          <img
-            src={fotoModal}
-            alt="Foto ampliada"
-            className="max-w-full max-h-full object-contain rounded-lg"
-            onClick={(e) => e.stopPropagation()}
-          />
-          <a
-            href={fotoModal}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={(e) => e.stopPropagation()}
-            className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-full bg-white/10 text-white text-[12px] font-semibold hover:bg-white/20 transition-colors"
-          >
-            Abrir original
-          </a>
-        </div>
-      )}
+      <FotoModal url={fotoModal.url} onClose={fotoModal.close} showOpenOriginal />
     </div>
   );
 }

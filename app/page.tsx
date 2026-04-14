@@ -1,137 +1,32 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import NextImage from "next/image";
 import Markdown from "react-markdown";
-import { analizarImagen, type AnalizarResponse } from "@/lib/analizar";
-
-type Status = { label: string; key: string; color: string; bg: string; ring: string };
-
-const GOOD: Status = { label: "En rango", key: "good", color: "text-verde-700", bg: "bg-verde-50", ring: "ring-verde-200" };
-const WARN: Status = { label: "Atenci\u00f3n", key: "warning", color: "text-amber-700", bg: "bg-amber-50", ring: "ring-amber-200" };
-const DANGER: Status = { label: "Fuera de rango", key: "danger", color: "text-red-700", bg: "bg-red-50", ring: "ring-red-200" };
-
-function getStatus(temp: number, ph: number, hum: number, dia?: number | null): Status {
-  // Determine phase from day of process
-  let phase: "mesofilica" | "termofilica" | "maduracion" = "mesofilica";
-  if (dia && dia > 30) phase = "maduracion";
-  else if (dia && dia > 7) phase = "termofilica";
-
-  // Phase-specific optimal ranges [min, max]
-  const ranges = {
-    mesofilica:  { temp: [25, 40], ph: [5.5, 7.0], hum: [55, 65] },
-    termofilica: { temp: [55, 65], ph: [7.0, 8.5], hum: [50, 60] },
-    maduracion:  { temp: [25, 40], ph: [6.5, 8.0], hum: [45, 55] },
-  }[phase];
-
-  // Hard danger limits (regardless of phase)
-  if (temp > 75 || temp < 10 || ph < 4.0 || ph > 9.5 || hum < 25 || hum > 85) return DANGER;
-
-  // Check each parameter against phase range with warning margin of ~15%
-  let worst: Status = GOOD;
-  function check(val: number, min: number, max: number) {
-    const margin = (max - min) * 0.3;
-    if (val < min - margin || val > max + margin) worst = DANGER;
-    else if (val < min || val > max) { if (worst !== DANGER) worst = WARN; }
-  }
-
-  check(temp, ranges.temp[0], ranges.temp[1]);
-  check(ph, ranges.ph[0], ranges.ph[1]);
-  check(hum, ranges.hum[0], ranges.hum[1]);
-  return worst;
-}
-
-type DiagFoto = { url: string; fecha: string; dia: number | null };
-type Message = {
-  role: "user" | "assistant";
-  content: string;
-  fotos?: DiagFoto[];
-};
-
-const HUMEDAD_NIVELES: { label: string; value: number }[] = [
-  { label: "DRY++", value: 20 },
-  { label: "DRY+", value: 30 },
-  { label: "DRY", value: 40 },
-  { label: "WET", value: 55 },
-  { label: "WET+", value: 70 },
-  { label: "WET++", value: 85 },
-];
-
-type ComposteraInfo = {
-  id: number;
-  nombre: string | null;
-  fecha_inicio: string | null;
-  activa: boolean;
-};
-
-function diasDesde(fecha: string, hasta?: string): number {
-  const inicio = new Date(fecha + "T00:00:00");
-  const fin = hasta ? new Date(hasta + "T00:00:00") : new Date();
-  fin.setHours(0, 0, 0, 0);
-  return Math.floor((fin.getTime() - inicio.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-}
-
-function hoyISO(): string {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-/* ---- SVG Icons ---- */
-function IconClipboard() {
-  return (
-    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15a2.25 2.25 0 012.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25z" />
-    </svg>
-  );
-}
-
-function IconChat() {
-  return (
-    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 8.511c.884.284 1.5 1.128 1.5 2.097v4.286c0 1.136-.847 2.1-1.98 2.193-.34.027-.68.052-1.02.072v3.091l-3-3c-1.354 0-2.694-.055-4.02-.163a2.115 2.115 0 01-.825-.242m9.345-8.334a2.126 2.126 0 00-.476-.095 48.64 48.64 0 00-8.048 0c-1.131.094-1.976 1.057-1.976 2.192v4.286c0 1.136.845 2.1 1.976 2.193 1.31.109 2.637.163 3.974.163l3 3v-3.091c.34-.02.68-.045 1.02-.072 1.133-.094 1.98-1.057 1.98-2.193V10.608c0-.969-.616-1.813-1.5-2.097z" />
-    </svg>
-  );
-}
-
-function IconArrowLeft() {
-  return (
-    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
-    </svg>
-  );
-}
-
-function IconSend() {
-  return (
-    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
-    </svg>
-  );
-}
-
-function IconLeaf() {
-  return (
-    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-      <path d="M17 8C8 10 5.9 16.17 3.82 21.34l1.89.66.95-2.71c.15-.43.31-.85.49-1.26C8.1 19.83 10.28 21 13 21c5.5 0 9-3.5 9-9V3l-1-.5C21 2.5 17 2 17 8zm-4 11c-1.78 0-3.35-.65-4.59-1.76C10.77 13.83 14.53 11.29 17 10c-2.49 1.29-5.36 4.07-6.81 7.25-.23-.48-.39-.98-.39-1.5 0-1.5.89-2.83 2.2-3.42.68-.3 1.42-.47 2.16-.49C16 11 17 10 17 8s2-4 4-4v4c0 4.5-3.5 8-8 8z" />
-    </svg>
-  );
-}
-
-function IconChart() {
-  return (
-    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5m.75-9l3-1.5m-3 1.5l-3-1.5M9 11.25v1.5M12 9v3.75m3-6v6" />
-    </svg>
-  );
-}
+import { getStatus } from "@/lib/estado";
+import { hoyISO, diasDesde } from "@/lib/fechas";
+import { HUMEDAD_NIVELES } from "@/lib/humedad";
+import type { ComposteraInfo, Message } from "@/lib/types";
+import {
+  IconClipboard,
+  IconChat,
+  IconArrowLeft,
+  IconSend,
+  IconLeaf,
+  IconChart,
+  IconCamera,
+} from "@/components/ui/icons";
+import { FotoModal } from "@/components/ui/FotoModal";
+import { AnalisisBadge } from "@/components/ui/AnalisisBadge";
+import { usePhotoUpload } from "@/hooks/usePhotoUpload";
+import { useImageAnalysis } from "@/hooks/useImageAnalysis";
+import { useFotoModal } from "@/hooks/useFotoModal";
+import { useComposteras } from "@/hooks/useComposteras";
 
 export default function Home() {
   const [mode, setMode] = useState<"select" | "registro" | "pregunta" | "chat" | "diagnostico-historico">("select");
-  const [composteras, setComposteras] = useState<ComposteraInfo[]>([]);
+  const { composteras, activas: activeComposteras } = useComposteras();
   const [compostera, setCompostera] = useState("1");
   const [temp, setTemp] = useState("");
   const [ph, setPh] = useState("");
@@ -139,28 +34,13 @@ export default function Home() {
   const [obs, setObs] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
-  const [fotoModal, setFotoModal] = useState<string | null>(null);
+  const fotoModal = useFotoModal();
 
-  useEffect(() => {
-    if (!fotoModal) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setFotoModal(null); };
-    window.addEventListener("keydown", onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prev;
-    };
-  }, [fotoModal]);
   const [freeQuestion, setFreeQuestion] = useState("");
   const [saveStatus, setSaveStatus] = useState<"" | "ok" | "error">("");
   const [validationError, setValidationError] = useState("");
-  const [foto, setFoto] = useState<File | null>(null);
-  const [fotoPreview, setFotoPreview] = useState("");
-  const [fotoUploading, setFotoUploading] = useState(false);
-  const [analyzing, setAnalyzing] = useState(false);
-  const [analyzeError, setAnalyzeError] = useState("");
-  const [analisisData, setAnalisisData] = useState<AnalizarResponse | null>(null);
+  const photo = usePhotoUpload();
+  const analysis = useImageAnalysis();
   const [datosGuardados, setDatosGuardados] = useState(false);
   const [noGuardarPregunta, setNoGuardarPregunta] = useState(true);
   const [diagCompostera, setDiagCompostera] = useState("1");
@@ -168,90 +48,22 @@ export default function Home() {
   const [diagError, setDiagError] = useState("");
   const [fechaRegistro, setFechaRegistro] = useState(hoyISO());
   const chatEnd = useRef<HTMLDivElement>(null);
-  const fotoInput = useRef<HTMLInputElement>(null);
 
-  const fetchComposteras = useCallback(async () => {
-    try {
-      const res = await fetch("/api/composteras");
-      const rows = await res.json();
-      if (Array.isArray(rows)) setComposteras(rows);
-    } catch { /* ignore */ }
-  }, []);
-
-  useEffect(() => { fetchComposteras(); }, [fetchComposteras]);
   useEffect(() => { chatEnd.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, loading]);
 
   const selectedInfo = composteras.find((c) => c.id === parseInt(compostera));
   const diaActual = selectedInfo?.fecha_inicio ? diasDesde(selectedInfo.fecha_inicio.split("T")[0], fechaRegistro) : null;
-  const activeComposteras = composteras.filter((c) => c.activa);
-
-  function compressImage(file: File, maxWidth = 1200, quality = 0.7): Promise<File> {
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        let w = img.width, h = img.height;
-        if (w > maxWidth) { h = (h * maxWidth) / w; w = maxWidth; }
-        canvas.width = w;
-        canvas.height = h;
-        canvas.getContext("2d")!.drawImage(img, 0, 0, w, h);
-        canvas.toBlob(
-          (blob) => resolve(new File([blob!], file.name, { type: "image/jpeg" })),
-          "image/jpeg",
-          quality,
-        );
-      };
-      img.src = URL.createObjectURL(file);
-    });
-  }
-
-  function handleFoto(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setFoto(file);
-    setFotoPreview(URL.createObjectURL(file));
-  }
 
   function clearFoto() {
-    setFoto(null);
-    setFotoPreview("");
-    setAnalyzeError("");
-    setAnalisisData(null);
-    if (fotoInput.current) fotoInput.current.value = "";
+    photo.clear();
+    analysis.reset();
   }
 
   async function handleAnalizar() {
-    if (!foto || analyzing) return;
-    setAnalyzing(true);
-    setAnalyzeError("");
-    try {
-      const data = await analizarImagen(foto);
-      setAnalisisData(data);
+    if (!photo.foto) return;
+    const data = await analysis.analizar(photo.foto);
+    if (data) {
       setObs((prev) => (prev.trim() ? `${prev.trim()} ${data.resultado}` : data.resultado));
-    } catch (e) {
-      setAnalyzeError(e instanceof Error ? e.message : "No se pudo analizar la imagen");
-    } finally {
-      setAnalyzing(false);
-    }
-  }
-
-  async function uploadFoto(): Promise<string | null> {
-    if (!foto) return null;
-    setFotoUploading(true);
-    try {
-      const compressed = await compressImage(foto);
-      const formData = new FormData();
-      formData.append("foto", compressed);
-      const res = await fetch("/api/upload", { method: "POST", body: formData });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({ error: "Error al subir la foto" }));
-        throw new Error(data?.error || `Error ${res.status} al subir la foto`);
-      }
-      const data = await res.json();
-      if (!data?.url) throw new Error("El servidor no devolvió la URL de la foto");
-      return data.url;
-    } finally {
-      setFotoUploading(false);
     }
   }
 
@@ -316,9 +128,9 @@ export default function Home() {
 
     // Upload photo first if present
     let fotoUrl: string | null = null;
-    if (foto) {
+    if (photo.foto) {
       try {
-        fotoUrl = await uploadFoto();
+        fotoUrl = await photo.upload();
       } catch (e) {
         setValidationError(
           e instanceof Error
@@ -605,28 +417,26 @@ export default function Home() {
               <div className="mb-5">
                 <label className="input-label">Foto (opcional)</label>
                 <input
-                  ref={fotoInput}
+                  ref={photo.inputRef}
                   type="file"
                   accept="image/*"
                   capture="environment"
-                  onChange={handleFoto}
+                  onChange={photo.handleSelect}
                   className="hidden"
                 />
-                {!fotoPreview ? (
+                {!photo.fotoPreview ? (
                   <button
                     type="button"
-                    onClick={() => fotoInput.current?.click()}
+                    onClick={photo.open}
                     className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 border-dashed border-verde-200 text-verde-600 text-[13px] font-semibold transition-colors hover:border-verde-400 hover:bg-verde-50/50 active:scale-[0.98]"
                   >
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
-                    </svg>
+                    <IconCamera />
                     Tomar foto de la composta
                   </button>
                 ) : (
                   <div className="relative">
-                    <img src={fotoPreview} alt="Preview" className="w-full h-40 object-cover rounded-xl" />
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={photo.fotoPreview} alt="Preview" className="w-full h-40 object-cover rounded-xl" />
                     <button
                       type="button"
                       onClick={clearFoto}
@@ -634,50 +444,29 @@ export default function Home() {
                     >
                       &times;
                     </button>
-                    {fotoUploading && (
+                    {photo.uploading && (
                       <div className="absolute inset-0 bg-white/60 rounded-xl flex items-center justify-center">
                         <span className="text-[13px] font-semibold text-verde-700 animate-pulse-fade">Subiendo foto...</span>
                       </div>
                     )}
                   </div>
                 )}
-                {foto && (
+                {photo.foto && (
                   <>
                     <button
                       type="button"
                       onClick={handleAnalizar}
-                      disabled={analyzing}
+                      disabled={analysis.analyzing}
                       className="mt-2 w-full px-4 py-2.5 rounded-xl bg-verde-700 text-white text-[13px] font-semibold shadow-card transition-all active:scale-[0.98] disabled:bg-gray-300 disabled:shadow-none"
                     >
-                      {analyzing ? "Analizando..." : "Analizar imagen"}
+                      {analysis.analyzing ? "Analizando..." : "Analizar imagen"}
                     </button>
-                    {analyzeError && (
+                    {analysis.error && (
                       <div className="mt-2 px-3 py-2 rounded-xl text-[12px] font-semibold text-red-700 bg-red-50 ring-1 ring-red-200">
-                        {analyzeError}
+                        {analysis.error}
                       </div>
                     )}
-                    {analisisData?.estado && analisisData?.accion && (
-                      <div
-                        className={`mt-2 px-3 py-2 rounded-xl text-[12px] font-semibold ring-1 flex items-center gap-2 ${
-                          analisisData.estado === "verde"
-                            ? "text-verde-700 bg-verde-50 ring-verde-200"
-                            : analisisData.estado === "amarillo"
-                              ? "text-amber-700 bg-amber-50 ring-amber-200"
-                              : "text-red-700 bg-red-50 ring-red-200"
-                        }`}
-                      >
-                        <span
-                          className={`w-2 h-2 rounded-full ${
-                            analisisData.estado === "verde"
-                              ? "bg-verde-500"
-                              : analisisData.estado === "amarillo"
-                                ? "bg-amber-500"
-                                : "bg-red-500"
-                          }`}
-                        />
-                        {analisisData.accion}
-                      </div>
-                    )}
+                    <AnalisisBadge estado={analysis.data?.estado} accion={analysis.data?.accion} />
                   </>
                 )}
               </div>
@@ -871,7 +660,7 @@ export default function Home() {
                             <button
                               key={idx}
                               type="button"
-                              onClick={() => setFotoModal(f.url)}
+                              onClick={() => fotoModal.open(f.url)}
                               className="flex flex-col items-center gap-1 active:scale-95 transition-transform"
                               aria-label="Ver foto en grande"
                             >
@@ -929,30 +718,7 @@ export default function Home() {
         )}
       </main>
 
-      {fotoModal && (
-        <div
-          onClick={() => setFotoModal(null)}
-          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4 animate-fade-in"
-          role="dialog"
-          aria-modal="true"
-        >
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); setFotoModal(null); }}
-            className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 text-white text-2xl flex items-center justify-center hover:bg-white/20 transition-colors"
-            aria-label="Cerrar"
-          >
-            &times;
-          </button>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={fotoModal}
-            alt="Foto ampliada"
-            className="max-w-full max-h-full object-contain rounded-lg"
-            onClick={(e) => e.stopPropagation()}
-          />
-        </div>
-      )}
+      <FotoModal url={fotoModal.url} onClose={fotoModal.close} />
     </div>
   );
 }

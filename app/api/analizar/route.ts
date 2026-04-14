@@ -13,6 +13,7 @@ import {
   getAnalisisByHash,
   insertAnalisis,
 } from "@/lib/db";
+import { callOpenAIVision } from "@/lib/openai-vision";
 
 const MAX_SIZE = 5 * 1024 * 1024;
 
@@ -88,47 +89,20 @@ export async function POST(req: NextRequest) {
     const base64 = buf.toString("base64");
     const dataUrl = `data:${file.type};base64,${base64}`;
 
-    const res = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: "gpt-5.4-mini",
-        temperature: 0,
-        max_output_tokens: 80,
-        input: [
-          {
-            role: "user",
-            content: [
-              { type: "input_text", text: PROMPT },
-              { type: "input_image", image_url: dataUrl },
-            ],
-          },
-        ],
-      }),
+    const respuesta = await callOpenAIVision({
+      apiKey,
+      model: "gpt-5.4-mini",
+      prompt: PROMPT,
+      dataUrl,
+      maxOutputTokens: 80,
     });
 
-    if (!res.ok) {
-      const detail = await res.text().catch(() => "");
-      console.error("[analizar] OpenAI error:", res.status, detail);
+    if (!respuesta.ok) {
+      console.error("[analizar] OpenAI error:", respuesta.status, respuesta.detail);
       return NextResponse.json({ error: "No se pudo analizar la imagen" }, { status: 502 });
     }
 
-    const data = await res.json();
-    let resultado: string = data.output_text || "";
-    if (!resultado && Array.isArray(data.output)) {
-      for (const item of data.output) {
-        const parts = item?.content;
-        if (Array.isArray(parts)) {
-          for (const p of parts) {
-            if (typeof p?.text === "string") resultado += p.text;
-          }
-        }
-      }
-    }
-    resultado = resultado.trim();
+    const resultado = respuesta.texto;
     if (!resultado) {
       return NextResponse.json({ error: "No se pudo analizar la imagen" }, { status: 502 });
     }

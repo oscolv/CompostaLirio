@@ -19,7 +19,7 @@ export async function GET(
       return NextResponse.json({ error: "id inválido" }, { status: 400 });
     }
     const rows = await getFormulacionesDeCompostera(compostera_id);
-    return NextResponse.json(rows);
+    return NextResponse.json(rows, { headers: { "Cache-Control": "no-store" } });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });

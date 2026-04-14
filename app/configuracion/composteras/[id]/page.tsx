@@ -107,10 +107,11 @@ export default function ComposteraDetailPage() {
     setLoading(true);
     setError("");
     try {
+      const t = Date.now();
       const [compRes, asocRes, formRes] = await Promise.all([
-        fetch("/api/composteras", { cache: "no-store" }),
-        fetch(`/api/composteras/${composteraId}/formulaciones`, { cache: "no-store" }),
-        fetch("/api/formulaciones", { cache: "no-store" }),
+        fetch(`/api/composteras?t=${t}`, { cache: "no-store" }),
+        fetch(`/api/composteras/${composteraId}/formulaciones?t=${t}`, { cache: "no-store" }),
+        fetch(`/api/formulaciones?t=${t}`, { cache: "no-store" }),
       ]);
       const comps = (await compRes.json()) as Compostera[];
       const asocs = (await asocRes.json()) as Asociacion[];

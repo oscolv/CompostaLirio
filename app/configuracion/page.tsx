@@ -237,6 +237,14 @@ export default function Configuracion() {
                         />
                       </div>
                     </div>
+
+                    <Link
+                      href={`/configuracion/composteras/${c.id}`}
+                      className="mt-3 flex items-center justify-between text-[12px] font-medium text-verde-700 hover:text-verde-900 transition-colors"
+                    >
+                      <span>Formulaciones y detalle</span>
+                      <span className="text-base leading-none">→</span>
+                    </Link>
                   </div>
                 );
               })}

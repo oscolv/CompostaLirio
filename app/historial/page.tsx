@@ -12,6 +12,7 @@ import { FotoModal } from "@/components/ui/FotoModal";
 import { AnalisisBadge } from "@/components/ui/AnalisisBadge";
 import { useImageAnalysis } from "@/hooks/useImageAnalysis";
 import { useFotoModal } from "@/hooks/useFotoModal";
+import { TemperatureChart } from "@/components/charts/TemperatureChart";
 
 export default function Historial() {
   const [mediciones, setMediciones] = useState<Medicion[]>([]);
@@ -192,7 +193,17 @@ export default function Historial() {
   }
 
   const [downloading, setDownloading] = useState(false);
+  const [showChart, setShowChart] = useState(false);
   const fotoModal = useFotoModal();
+
+  useEffect(() => { setShowChart(false); }, [filtro]);
+
+  const tempPoints = filtro
+    ? mediciones
+        .filter((m) => typeof m.temperatura === "number" && !isNaN(m.temperatura))
+        .map((m) => ({ fecha: new Date(m.created_at), temperatura: Number(m.temperatura) }))
+    : [];
+  const canShowChart = !!filtro && tempPoints.length > 0;
 
   async function downloadCSV() {
     setDownloading(true);
@@ -259,6 +270,25 @@ export default function Historial() {
             {downloading ? "Descargando..." : "CSV"}
           </button>
         </div>
+
+        {canShowChart && (
+          <div className="mb-4">
+            <button
+              onClick={() => setShowChart((v) => !v)}
+              className="w-full px-4 py-2.5 rounded-xl bg-verde-50 text-verde-700 text-[13px] font-semibold hover:bg-verde-100 transition-all active:scale-[0.98]"
+            >
+              {showChart ? "Ocultar gr\u00e1fica" : "Mostrar gr\u00e1fica"}
+            </button>
+            {showChart && (
+              <div className="mt-3 rounded-2xl p-4 border border-verde-100 bg-white shadow-card animate-fade-in">
+                <div className="text-[13px] font-semibold text-verde-800 mb-2">
+                  Evoluci&oacute;n de temperatura
+                </div>
+                <TemperatureChart puntos={tempPoints} />
+              </div>
+            )}
+          </div>
+        )}
 
         {loading && (
           <div className="text-center text-verde-600 py-12 text-[14px] animate-pulse-fade">

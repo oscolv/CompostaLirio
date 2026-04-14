@@ -140,7 +140,12 @@ export default function Historial() {
     setEditAnalyzeError("");
     try {
       const resultado = await analizarImagen(file);
-      setEditForm((prev) => ({ ...prev, observaciones: resultado }));
+      setEditForm((prev) => ({
+        ...prev,
+        observaciones: prev.observaciones.trim()
+          ? `${prev.observaciones.trim()} ${resultado}`
+          : resultado,
+      }));
     } catch {
       setEditAnalyzeError("No se pudo analizar la imagen");
     } finally {

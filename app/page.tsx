@@ -224,7 +224,7 @@ export default function Home() {
     setAnalyzeError("");
     try {
       const resultado = await analizarImagen(foto);
-      setObs(resultado);
+      setObs((prev) => (prev.trim() ? `${prev.trim()} ${resultado}` : resultado));
     } catch {
       setAnalyzeError("No se pudo analizar la imagen");
     } finally {

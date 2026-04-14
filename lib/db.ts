@@ -388,6 +388,22 @@ export async function getFormulacionesDeCompostera(compostera_id: number) {
   `;
 }
 
+// Devuelve todas las formulaciones (activas e inactivas), útil para análisis.
+export async function getAllFormulaciones() {
+  const sql = getSQL();
+  return sql`SELECT * FROM formulaciones ORDER BY id`;
+}
+
+// Devuelve todas las asociaciones compostera-formulación.
+export async function getAllAsociacionesFormulacion() {
+  const sql = getSQL();
+  return sql`
+    SELECT compostera_id, formulacion_id, es_actual, fecha_asociacion
+    FROM compostera_formulaciones
+    ORDER BY fecha_asociacion DESC, created_at DESC
+  `;
+}
+
 export async function getFormulacionActual(compostera_id: number) {
   const sql = getSQL();
   const rows = await sql`

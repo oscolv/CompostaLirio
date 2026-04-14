@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import NextImage from "next/image";
-import { analizarImagen } from "@/lib/analizar";
+import { analizarImagen, type AnalizarResponse } from "@/lib/analizar";
 
 type Medicion = {
   id: number;
@@ -60,6 +60,7 @@ export default function Historial() {
   const [editFotoUploading, setEditFotoUploading] = useState(false);
   const [editAnalyzing, setEditAnalyzing] = useState(false);
   const [editAnalyzeError, setEditAnalyzeError] = useState("");
+  const [editAnalisisData, setEditAnalisisData] = useState<AnalizarResponse | null>(null);
   const editFotoInput = useRef<HTMLInputElement>(null);
 
   const fetchData = useCallback(async () => {
@@ -120,6 +121,7 @@ export default function Historial() {
     setEditFotoPreview("");
     setEditFotoRemoved(false);
     setEditAnalyzeError("");
+    setEditAnalisisData(null);
   }
 
   async function handleEditAnalizar() {
@@ -139,15 +141,16 @@ export default function Historial() {
     setEditAnalyzing(true);
     setEditAnalyzeError("");
     try {
-      const resultado = await analizarImagen(file);
+      const data = await analizarImagen(file);
+      setEditAnalisisData(data);
       setEditForm((prev) => ({
         ...prev,
         observaciones: prev.observaciones.trim()
-          ? `${prev.observaciones.trim()} ${resultado}`
-          : resultado,
+          ? `${prev.observaciones.trim()} ${data.resultado}`
+          : data.resultado,
       }));
-    } catch {
-      setEditAnalyzeError("No se pudo analizar la imagen");
+    } catch (e) {
+      setEditAnalyzeError(e instanceof Error ? e.message : "No se pudo analizar la imagen");
     } finally {
       setEditAnalyzing(false);
     }
@@ -610,6 +613,28 @@ export default function Historial() {
                         {editAnalyzeError && (
                           <div className="mt-2 px-3 py-1.5 rounded-lg text-[11px] font-semibold text-red-700 bg-red-50 ring-1 ring-red-200">
                             {editAnalyzeError}
+                          </div>
+                        )}
+                        {editAnalisisData?.estado && editAnalisisData?.accion && (
+                          <div
+                            className={`mt-2 px-3 py-1.5 rounded-lg text-[11px] font-semibold ring-1 flex items-center gap-2 ${
+                              editAnalisisData.estado === "verde"
+                                ? "text-verde-700 bg-verde-50 ring-verde-200"
+                                : editAnalisisData.estado === "amarillo"
+                                  ? "text-amber-700 bg-amber-50 ring-amber-200"
+                                  : "text-red-700 bg-red-50 ring-red-200"
+                            }`}
+                          >
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full ${
+                                editAnalisisData.estado === "verde"
+                                  ? "bg-verde-500"
+                                  : editAnalisisData.estado === "amarillo"
+                                    ? "bg-amber-500"
+                                    : "bg-red-500"
+                              }`}
+                            />
+                            {editAnalisisData.accion}
                           </div>
                         )}
                       </div>

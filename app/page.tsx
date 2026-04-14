@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 import NextImage from "next/image";
 import Markdown from "react-markdown";
-import { analizarImagen } from "@/lib/analizar";
+import { analizarImagen, type AnalizarResponse } from "@/lib/analizar";
 
 type Status = { label: string; key: string; color: string; bg: string; ring: string };
 
@@ -160,6 +160,7 @@ export default function Home() {
   const [fotoUploading, setFotoUploading] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzeError, setAnalyzeError] = useState("");
+  const [analisisData, setAnalisisData] = useState<AnalizarResponse | null>(null);
   const [datosGuardados, setDatosGuardados] = useState(false);
   const [noGuardarPregunta, setNoGuardarPregunta] = useState(true);
   const [diagCompostera, setDiagCompostera] = useState("1");
@@ -215,6 +216,7 @@ export default function Home() {
     setFoto(null);
     setFotoPreview("");
     setAnalyzeError("");
+    setAnalisisData(null);
     if (fotoInput.current) fotoInput.current.value = "";
   }
 
@@ -223,10 +225,11 @@ export default function Home() {
     setAnalyzing(true);
     setAnalyzeError("");
     try {
-      const resultado = await analizarImagen(foto);
-      setObs((prev) => (prev.trim() ? `${prev.trim()} ${resultado}` : resultado));
-    } catch {
-      setAnalyzeError("No se pudo analizar la imagen");
+      const data = await analizarImagen(foto);
+      setAnalisisData(data);
+      setObs((prev) => (prev.trim() ? `${prev.trim()} ${data.resultado}` : data.resultado));
+    } catch (e) {
+      setAnalyzeError(e instanceof Error ? e.message : "No se pudo analizar la imagen");
     } finally {
       setAnalyzing(false);
     }
@@ -651,6 +654,28 @@ export default function Home() {
                     {analyzeError && (
                       <div className="mt-2 px-3 py-2 rounded-xl text-[12px] font-semibold text-red-700 bg-red-50 ring-1 ring-red-200">
                         {analyzeError}
+                      </div>
+                    )}
+                    {analisisData?.estado && analisisData?.accion && (
+                      <div
+                        className={`mt-2 px-3 py-2 rounded-xl text-[12px] font-semibold ring-1 flex items-center gap-2 ${
+                          analisisData.estado === "verde"
+                            ? "text-verde-700 bg-verde-50 ring-verde-200"
+                            : analisisData.estado === "amarillo"
+                              ? "text-amber-700 bg-amber-50 ring-amber-200"
+                              : "text-red-700 bg-red-50 ring-red-200"
+                        }`}
+                      >
+                        <span
+                          className={`w-2 h-2 rounded-full ${
+                            analisisData.estado === "verde"
+                              ? "bg-verde-500"
+                              : analisisData.estado === "amarillo"
+                                ? "bg-amber-500"
+                                : "bg-red-500"
+                          }`}
+                        />
+                        {analisisData.accion}
                       </div>
                     )}
                   </>

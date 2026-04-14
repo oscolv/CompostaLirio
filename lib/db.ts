@@ -116,6 +116,42 @@ export async function ensureTable() {
   `;
 }
 
+export async function ensureAnalisisTable() {
+  const sql = getSQL();
+  await sql`
+    CREATE TABLE IF NOT EXISTS analisis_cache (
+      hash TEXT PRIMARY KEY,
+      resultado TEXT NOT NULL,
+      json JSONB,
+      estado TEXT,
+      accion TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+}
+
+export async function getAnalisisByHash(hash: string) {
+  const sql = getSQL();
+  const rows = await sql`SELECT * FROM analisis_cache WHERE hash = ${hash}`;
+  return rows[0] || null;
+}
+
+export async function insertAnalisis(data: {
+  hash: string;
+  resultado: string;
+  json: unknown;
+  estado: string | null;
+  accion: string | null;
+}) {
+  const sql = getSQL();
+  const jsonStr = data.json === null || data.json === undefined ? null : JSON.stringify(data.json);
+  await sql`
+    INSERT INTO analisis_cache (hash, resultado, json, estado, accion)
+    VALUES (${data.hash}, ${data.resultado}, ${jsonStr}::jsonb, ${data.estado}, ${data.accion})
+    ON CONFLICT (hash) DO NOTHING
+  `;
+}
+
 export async function insertMedicion(data: {
   compostera: number;
   dia: number | null;

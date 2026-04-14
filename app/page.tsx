@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 import NextImage from "next/image";
 import Markdown from "react-markdown";
+import { analizarImagen } from "@/lib/analizar";
 
 type Status = { label: string; key: string; color: string; bg: string; ring: string };
 
@@ -157,6 +158,8 @@ export default function Home() {
   const [foto, setFoto] = useState<File | null>(null);
   const [fotoPreview, setFotoPreview] = useState("");
   const [fotoUploading, setFotoUploading] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analyzeError, setAnalyzeError] = useState("");
   const [datosGuardados, setDatosGuardados] = useState(false);
   const [noGuardarPregunta, setNoGuardarPregunta] = useState(true);
   const [diagCompostera, setDiagCompostera] = useState("1");
@@ -211,7 +214,22 @@ export default function Home() {
   function clearFoto() {
     setFoto(null);
     setFotoPreview("");
+    setAnalyzeError("");
     if (fotoInput.current) fotoInput.current.value = "";
+  }
+
+  async function handleAnalizar() {
+    if (!foto || analyzing) return;
+    setAnalyzing(true);
+    setAnalyzeError("");
+    try {
+      const resultado = await analizarImagen(foto);
+      setObs(resultado);
+    } catch {
+      setAnalyzeError("No se pudo analizar la imagen");
+    } finally {
+      setAnalyzing(false);
+    }
   }
 
   async function uploadFoto(): Promise<string | null> {
@@ -619,6 +637,23 @@ export default function Home() {
                       </div>
                     )}
                   </div>
+                )}
+                {foto && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleAnalizar}
+                      disabled={analyzing}
+                      className="mt-2 w-full px-4 py-2.5 rounded-xl bg-verde-700 text-white text-[13px] font-semibold shadow-card transition-all active:scale-[0.98] disabled:bg-gray-300 disabled:shadow-none"
+                    >
+                      {analyzing ? "Analizando..." : "Analizar imagen"}
+                    </button>
+                    {analyzeError && (
+                      <div className="mt-2 px-3 py-2 rounded-xl text-[12px] font-semibold text-red-700 bg-red-50 ring-1 ring-red-200">
+                        {analyzeError}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
 

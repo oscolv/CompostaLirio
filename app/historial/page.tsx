@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import NextImage from "next/image";
+import { analizarImagen } from "@/lib/analizar";
 
 type Medicion = {
   id: number;
@@ -57,6 +58,8 @@ export default function Historial() {
   const [editFotoExisting, setEditFotoExisting] = useState<string | null>(null);
   const [editFotoRemoved, setEditFotoRemoved] = useState(false);
   const [editFotoUploading, setEditFotoUploading] = useState(false);
+  const [editAnalyzing, setEditAnalyzing] = useState(false);
+  const [editAnalyzeError, setEditAnalyzeError] = useState("");
   const editFotoInput = useRef<HTMLInputElement>(null);
 
   const fetchData = useCallback(async () => {
@@ -116,6 +119,33 @@ export default function Historial() {
     setEditFoto(null);
     setEditFotoPreview("");
     setEditFotoRemoved(false);
+    setEditAnalyzeError("");
+  }
+
+  async function handleEditAnalizar() {
+    if (editAnalyzing) return;
+    let file: File | null = editFoto;
+    if (!file && !editFotoRemoved && editFotoExisting) {
+      try {
+        const r = await fetch(editFotoExisting);
+        const blob = await r.blob();
+        file = new File([blob], "existing.jpg", { type: blob.type || "image/jpeg" });
+      } catch {
+        setEditAnalyzeError("No se pudo analizar la imagen");
+        return;
+      }
+    }
+    if (!file) return;
+    setEditAnalyzing(true);
+    setEditAnalyzeError("");
+    try {
+      const resultado = await analizarImagen(file);
+      setEditForm((prev) => ({ ...prev, observaciones: resultado }));
+    } catch {
+      setEditAnalyzeError("No se pudo analizar la imagen");
+    } finally {
+      setEditAnalyzing(false);
+    }
   }
 
   function compressImage(file: File, maxWidth = 1200, quality = 0.7): Promise<File> {
@@ -562,6 +592,23 @@ export default function Historial() {
                         </button>
                       )}
                     </div>
+                    {(editFoto || (!editFotoRemoved && editFotoExisting)) && (
+                      <div className="mb-3">
+                        <button
+                          type="button"
+                          onClick={handleEditAnalizar}
+                          disabled={editAnalyzing}
+                          className="w-full px-4 py-2 rounded-lg bg-verde-700 text-white text-[12px] font-semibold transition-all active:scale-[0.98] disabled:bg-gray-300"
+                        >
+                          {editAnalyzing ? "Analizando..." : "Analizar imagen"}
+                        </button>
+                        {editAnalyzeError && (
+                          <div className="mt-2 px-3 py-1.5 rounded-lg text-[11px] font-semibold text-red-700 bg-red-50 ring-1 ring-red-200">
+                            {editAnalyzeError}
+                          </div>
+                        )}
+                      </div>
+                    )}
                     <div className="flex gap-2">
                       <button
                         onClick={() => handleSaveEdit(m.id)}

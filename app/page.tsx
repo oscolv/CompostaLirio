@@ -41,7 +41,12 @@ function getStatus(temp: number, ph: number, hum: number, dia?: number | null): 
   return worst;
 }
 
-type Message = { role: "user" | "assistant"; content: string };
+type DiagFoto = { url: string; fecha: string; dia: number | null };
+type Message = {
+  role: "user" | "assistant";
+  content: string;
+  fotos?: DiagFoto[];
+};
 
 const HUMEDAD_NIVELES: { label: string; value: number }[] = [
   { label: "DRY++", value: 20 },
@@ -133,6 +138,19 @@ export default function Home() {
   const [obs, setObs] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
+  const [fotoModal, setFotoModal] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!fotoModal) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setFotoModal(null); };
+    window.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [fotoModal]);
   const [freeQuestion, setFreeQuestion] = useState("");
   const [saveStatus, setSaveStatus] = useState<"" | "ok" | "error">("");
   const [validationError, setValidationError] = useState("");
@@ -342,7 +360,7 @@ export default function Home() {
       }
       setMessages([
         { role: "user", content: `Diagnóstico histórico de compostera #${diagCompostera}` },
-        { role: "assistant", content: data.reply },
+        { role: "assistant", content: data.reply, fotos: Array.isArray(data.fotos) ? data.fotos : [] },
       ]);
       setMode("chat");
     } catch {
@@ -779,6 +797,40 @@ export default function Home() {
                   ) : (
                     m.content
                   )}
+                  {m.role === "assistant" && m.fotos && m.fotos.length > 0 && (
+                    <div className="mt-3 pt-3 border-t border-verde-50">
+                      <div className="text-[11px] font-semibold text-verde-700/70 uppercase tracking-wider mb-2">
+                        Últimas fotos
+                      </div>
+                      <div className="flex gap-2">
+                        {m.fotos.map((f, idx) => {
+                          const fecha = new Date(f.fecha).toLocaleDateString("es-MX", {
+                            day: "numeric", month: "short", timeZone: "America/Mexico_City",
+                          });
+                          return (
+                            <button
+                              key={idx}
+                              type="button"
+                              onClick={() => setFotoModal(f.url)}
+                              className="flex flex-col items-center gap-1 active:scale-95 transition-transform"
+                              aria-label="Ver foto en grande"
+                            >
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={f.url}
+                                alt={`Foto ${fecha}`}
+                                className="w-20 h-20 object-cover rounded-lg border border-verde-100 shadow-sm"
+                              />
+                              <span className="text-[10px] text-gray-500 leading-tight text-center">
+                                {fecha}
+                                {f.dia != null && <><br />día {f.dia}</>}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
               {loading && (
@@ -816,6 +868,31 @@ export default function Home() {
           </div>
         )}
       </main>
+
+      {fotoModal && (
+        <div
+          onClick={() => setFotoModal(null)}
+          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4 animate-fade-in"
+          role="dialog"
+          aria-modal="true"
+        >
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setFotoModal(null); }}
+            className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 text-white text-2xl flex items-center justify-center hover:bg-white/20 transition-colors"
+            aria-label="Cerrar"
+          >
+            &times;
+          </button>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={fotoModal}
+            alt="Foto ampliada"
+            className="max-w-full max-h-full object-contain rounded-lg"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
     </div>
   );
 }

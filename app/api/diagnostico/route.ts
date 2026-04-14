@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SYSTEM_PROMPT, DIAGNOSTICO_HISTORICO_PROMPT } from "@/lib/prompt";
-import { ensureTable, insertConsulta } from "@/lib/db";
+import { ensureTable, insertConsulta, getMedicionesExport } from "@/lib/db";
 import { buildResumenHistorico } from "@/lib/diagnostico";
+
+type MedicionRow = {
+  id: number;
+  dia: number | null;
+  foto_url: string | null;
+  created_at: string;
+};
 
 // Rate limiting: 15 requests per hour per IP (heavier endpoint)
 const RATE_LIMIT = 15;
@@ -96,7 +103,19 @@ export async function POST(req: NextRequest) {
       console.error("[diagnostico] Failed to log consulta:", e);
     }
 
-    return NextResponse.json({ reply, resumen });
+    // Últimas 3 fotos (orden cronológico ascendente para narrar la trayectoria)
+    let fotos: { url: string; fecha: string; dia: number | null }[] = [];
+    try {
+      const rows = (await getMedicionesExport(compostera)) as MedicionRow[];
+      fotos = rows
+        .filter((r) => r.foto_url)
+        .slice(-3)
+        .map((r) => ({ url: r.foto_url as string, fecha: r.created_at, dia: r.dia }));
+    } catch (e) {
+      console.error("[diagnostico] fotos:", e);
+    }
+
+    return NextResponse.json({ reply, resumen, fotos });
   } catch (e) {
     console.error("[diagnostico] Error:", e);
     return NextResponse.json(

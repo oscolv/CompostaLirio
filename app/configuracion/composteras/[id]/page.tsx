@@ -82,15 +82,35 @@ export default function ComposteraDetailPage() {
   const [selFormId, setSelFormId] = useState<string>("");
   const [fecha, setFecha] = useState<string>(hoyISO());
   const [notas, setNotas] = useState<string>("");
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+
+  async function eliminarAsociacion(asocId: number) {
+    if (!confirm("¿Eliminar esta formulación asociada?")) return;
+    setDeletingId(asocId);
+    setMensaje("");
+    try {
+      const r = await fetch(
+        `/api/composteras/${composteraId}/formulaciones/${asocId}`,
+        { method: "DELETE" },
+      );
+      const data = await r.json();
+      if (!r.ok) throw new Error(data?.error || "Error al eliminar");
+      await cargar();
+    } catch (e) {
+      setMensaje(e instanceof Error ? e.message : "Error");
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   async function cargar() {
     setLoading(true);
     setError("");
     try {
       const [compRes, asocRes, formRes] = await Promise.all([
-        fetch("/api/composteras"),
-        fetch(`/api/composteras/${composteraId}/formulaciones`),
-        fetch("/api/formulaciones"),
+        fetch("/api/composteras", { cache: "no-store" }),
+        fetch(`/api/composteras/${composteraId}/formulaciones`, { cache: "no-store" }),
+        fetch("/api/formulaciones", { cache: "no-store" }),
       ]);
       const comps = (await compRes.json()) as Compostera[];
       const asocs = (await asocRes.json()) as Asociacion[];
@@ -365,6 +385,15 @@ export default function ComposteraDetailPage() {
                         </p>
                       )}
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => eliminarAsociacion(a.asociacion_id)}
+                      disabled={deletingId === a.asociacion_id}
+                      className="shrink-0 text-[11px] font-semibold text-red-600 hover:text-red-700 disabled:opacity-50 px-2 py-1"
+                      aria-label="Eliminar formulación asociada"
+                    >
+                      {deletingId === a.asociacion_id ? "..." : "Eliminar"}
+                    </button>
                   </div>
                 </li>
               ))}

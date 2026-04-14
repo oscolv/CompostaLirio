@@ -425,6 +425,11 @@ export async function getAllAsociacionesFormulacion() {
   `;
 }
 
+export async function deleteAsociacionFormulacion(asociacion_id: number) {
+  const sql = getSQL();
+  await sql`DELETE FROM compostera_formulaciones WHERE id = ${asociacion_id}`;
+}
+
 export async function getFormulacionActual(compostera_id: number) {
   const sql = getSQL();
   const rows = await sql`

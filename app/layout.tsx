@@ -2,9 +2,9 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Composta Lirio — San Francisco Bojay",
+  title: "CompostaLirio · Bitácora · San Francisco Bojay",
   description:
-    "Agente de monitoreo de composta de lirio acuático para la comunidad de San Francisco Bojay",
+    "Bitácora comunitaria de monitoreo de composta de lirio acuático — estación de campo de San Francisco Bojay, Hidalgo.",
   icons: {
     icon: [
       { url: "/favicon.ico" },
@@ -19,7 +19,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#1b5e20",
+  themeColor: "#0f1a11",
 };
 
 export default function RootLayout({
@@ -29,7 +29,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="es">
-      <body className="font-sans text-gray-900 antialiased">{children}</body>
+      <body className="font-sans antialiased text-tinta-900 selection:bg-tinta-800 selection:text-papel-50">
+        {children}
+      </body>
     </html>
   );
 }

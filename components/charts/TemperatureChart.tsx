@@ -21,8 +21,8 @@ export function TemperatureChart({ puntos, height = 200 }: Props) {
 
   if (data.length < 2) {
     return (
-      <div className="text-center text-gray-500 text-[13px] py-6">
-        No hay suficientes registros para mostrar la gr&aacute;fica
+      <div className="text-center text-tinta-500 text-[12px] uppercase tracking-kicker font-semibold py-8">
+        · Aún no hay suficientes registros para graficar ·
       </div>
     );
   }
@@ -75,51 +75,69 @@ export function TemperatureChart({ puntos, height = 200 }: Props) {
       role="img"
       aria-label="Gr&aacute;fica de temperatura vs tiempo"
     >
+      {/* Grilla */}
       {yLabels.map((t, i) => (
         <g key={i}>
           <line
-            x1={padL}
-            x2={W - padR}
-            y1={t.y}
-            y2={t.y}
-            stroke="#e5e7eb"
-            strokeWidth={1}
+            x1={padL} x2={W - padR}
+            y1={t.y} y2={t.y}
+            stroke="#0f1a11" strokeOpacity={i === 0 || i === yLabels.length - 1 ? 0.18 : 0.06}
+            strokeWidth={1} strokeDasharray={i === 0 || i === yLabels.length - 1 ? "0" : "2 3"}
           />
           <text
-            x={padL - 6}
-            y={t.y + 3}
+            x={padL - 8} y={t.y + 3}
             textAnchor="end"
-            fontSize="10"
-            fill="#6b7280"
+            fontSize="9.5"
+            fontFamily="'JetBrains Mono', monospace"
+            fill="#4a6340"
+            style={{ fontVariantNumeric: "tabular-nums" }}
           >
-            {t.v.toFixed(0)}&deg;
+            {t.v.toFixed(0)}°
           </text>
         </g>
       ))}
 
+      {/* Marcas de tiempo */}
       {xTicks.map((d, i) => (
-        <text
-          key={i}
-          x={x(d.fecha.getTime())}
-          y={H - 8}
-          textAnchor="middle"
-          fontSize="10"
-          fill="#6b7280"
-        >
-          {fmt(d.fecha)}
-        </text>
+        <g key={i}>
+          <line
+            x1={x(d.fecha.getTime())} x2={x(d.fecha.getTime())}
+            y1={padT + plotH} y2={padT + plotH + 4}
+            stroke="#0f1a11" strokeOpacity={0.3} strokeWidth={1}
+          />
+          <text
+            x={x(d.fecha.getTime())} y={H - 8}
+            textAnchor="middle"
+            fontSize="9.5"
+            fontFamily="'JetBrains Mono', monospace"
+            fill="#4a6340"
+            style={{ fontVariantNumeric: "tabular-nums", letterSpacing: "0.06em", textTransform: "uppercase" }}
+          >
+            {fmt(d.fecha)}
+          </text>
+        </g>
       ))}
 
-      <path d={path} fill="none" stroke="#15803d" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+      {/* Área bajo la curva */}
+      <defs>
+        <linearGradient id="tempFill" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stopColor="#253621" stopOpacity="0.18" />
+          <stop offset="100%" stopColor="#253621" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path
+        d={`${path} L ${x(times[times.length - 1]).toFixed(1)} ${padT + plotH} L ${x(times[0]).toFixed(1)} ${padT + plotH} Z`}
+        fill="url(#tempFill)"
+      />
 
+      {/* Línea principal */}
+      <path d={path} fill="none" stroke="#253621" strokeWidth={1.75} strokeLinejoin="round" strokeLinecap="round" />
+
+      {/* Puntos */}
       {data.map((d, i) => (
-        <circle
-          key={i}
-          cx={x(d.fecha.getTime())}
-          cy={y(d.temperatura)}
-          r={2.5}
-          fill="#15803d"
-        />
+        <g key={i}>
+          <circle cx={x(d.fecha.getTime())} cy={y(d.temperatura)} r={3.2} fill="#fcf9f0" stroke="#253621" strokeWidth={1.5} />
+        </g>
       ))}
     </svg>
   );

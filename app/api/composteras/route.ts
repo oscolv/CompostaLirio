@@ -22,6 +22,7 @@ export async function POST(req: NextRequest) {
         nombre: string | null;
         fecha_inicio: string | null;
         activa: boolean;
+        masa_inicial: number | null;
       }[];
     };
 

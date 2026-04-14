@@ -9,6 +9,7 @@ type Compostera = {
   nombre: string;
   fecha_inicio: string;
   activa: boolean;
+  masa_inicial: string;
 };
 
 function defaultComposteras(): Compostera[] {
@@ -17,6 +18,7 @@ function defaultComposteras(): Compostera[] {
     nombre: "",
     fecha_inicio: "",
     activa: true,
+    masa_inicial: "",
   }));
 }
 
@@ -53,12 +55,18 @@ export default function Configuracion() {
   useEffect(() => {
     fetch("/api/composteras")
       .then((r) => r.json())
-      .then((rows: Compostera[]) => {
+      .then((rows: Array<{ id: number; nombre: string | null; fecha_inicio: string | null; activa: boolean; masa_inicial: number | null }>) => {
         if (Array.isArray(rows) && rows.length > 0) {
           const merged = defaultComposteras().map((def) => {
             const saved = rows.find((r) => r.id === def.id);
             return saved
-              ? { ...saved, nombre: saved.nombre || "", fecha_inicio: saved.fecha_inicio ? saved.fecha_inicio.split("T")[0] : "" }
+              ? {
+                  id: saved.id,
+                  nombre: saved.nombre || "",
+                  fecha_inicio: saved.fecha_inicio ? saved.fecha_inicio.split("T")[0] : "",
+                  activa: saved.activa,
+                  masa_inicial: saved.masa_inicial != null ? String(saved.masa_inicial) : "",
+                }
               : def;
           });
           setComposteras(merged);
@@ -76,9 +84,16 @@ export default function Configuracion() {
     setSaving(true);
     setMensaje("");
     try {
-      const payload = composteras.map((c) => ({
-        id: c.id, nombre: c.nombre || null, fecha_inicio: c.fecha_inicio || null, activa: c.activa,
-      }));
+      const payload = composteras.map((c) => {
+        const masa = c.masa_inicial.trim() === "" ? null : Number(c.masa_inicial);
+        return {
+          id: c.id,
+          nombre: c.nombre || null,
+          fecha_inicio: c.fecha_inicio || null,
+          activa: c.activa,
+          masa_inicial: masa != null && !Number.isNaN(masa) ? masa : null,
+        };
+      });
       const res = await fetch("/api/composteras", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -193,10 +208,41 @@ export default function Configuracion() {
                           className="w-full px-2.5 py-2 border border-verde-200/50 rounded-lg text-[13px] bg-white outline-none focus:border-verde-400 transition-colors"
                         />
                       </div>
+                      <div className="col-span-2">
+                        <label className="text-[10px] font-semibold text-verde-700/50 uppercase tracking-wider block mb-1">
+                          Masa inicial (kg)
+                        </label>
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          min="0"
+                          step="0.1"
+                          placeholder="Ej: 200"
+                          value={c.masa_inicial}
+                          onChange={(e) => update(c.id, "masa_inicial", e.target.value)}
+                          className="w-full px-2.5 py-2 border border-verde-200/50 rounded-lg text-[13px] bg-white outline-none focus:border-verde-400 transition-colors"
+                        />
+                      </div>
                     </div>
                   </div>
                 );
               })}
+            </div>
+          )}
+
+          {!loading && (
+            <div className="mt-5 rounded-xl border border-verde-200/60 bg-verde-50/60 px-4 py-3 flex items-center justify-between">
+              <span className="text-[12px] font-semibold text-verde-700 uppercase tracking-wider">
+                Masa total de composta
+              </span>
+              <span className="text-[18px] font-bold text-verde-900 tabular-nums">
+                {composteras
+                  .reduce((acc, c) => {
+                    const n = Number(c.masa_inicial);
+                    return acc + (Number.isFinite(n) ? n : 0);
+                  }, 0)
+                  .toLocaleString("es-MX", { maximumFractionDigits: 2 })} kg
+              </span>
             </div>
           )}
 

@@ -30,9 +30,11 @@ export async function ensureTable() {
       id INTEGER PRIMARY KEY,
       nombre TEXT,
       fecha_inicio DATE,
-      activa BOOLEAN NOT NULL DEFAULT TRUE
+      activa BOOLEAN NOT NULL DEFAULT TRUE,
+      masa_inicial REAL
     )
   `;
+  await sql`ALTER TABLE composteras ADD COLUMN IF NOT EXISTS masa_inicial REAL`;
   await sql`
     CREATE TABLE IF NOT EXISTS consultas (
       id SERIAL PRIMARY KEY,
@@ -188,14 +190,16 @@ export async function upsertCompostera(data: {
   nombre: string | null;
   fecha_inicio: string | null;
   activa: boolean;
+  masa_inicial: number | null;
 }) {
   const sql = getSQL();
   await sql`
-    INSERT INTO composteras (id, nombre, fecha_inicio, activa)
-    VALUES (${data.id}, ${data.nombre}, ${data.fecha_inicio}, ${data.activa})
+    INSERT INTO composteras (id, nombre, fecha_inicio, activa, masa_inicial)
+    VALUES (${data.id}, ${data.nombre}, ${data.fecha_inicio}, ${data.activa}, ${data.masa_inicial})
     ON CONFLICT (id) DO UPDATE SET
       nombre = ${data.nombre},
       fecha_inicio = ${data.fecha_inicio},
-      activa = ${data.activa}
+      activa = ${data.activa},
+      masa_inicial = ${data.masa_inicial}
   `;
 }

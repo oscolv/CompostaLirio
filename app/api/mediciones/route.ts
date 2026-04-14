@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { ensureTable, insertMedicion, getMediciones, getMedicionById, deleteMedicion, updateMedicion } from "@/lib/db";
 import { del } from "@vercel/blob";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export async function POST(req: NextRequest) {
   try {
     await ensureTable();
@@ -105,7 +108,7 @@ export async function GET(req: NextRequest) {
     const rows = await getMediciones(
       compostera ? parseInt(compostera) : undefined,
     );
-    return NextResponse.json(rows);
+    return NextResponse.json(rows, { headers: { "Cache-Control": "no-store" } });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });

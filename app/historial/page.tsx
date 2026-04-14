@@ -63,8 +63,10 @@ export default function Historial() {
     setLoading(true);
     setError("");
     try {
-      const params = filtro ? `?compostera=${filtro}` : "";
-      const res = await fetch(`/api/mediciones${params}`);
+      const qs = new URLSearchParams();
+      if (filtro) qs.set("compostera", filtro);
+      qs.set("t", String(Date.now()));
+      const res = await fetch(`/api/mediciones?${qs.toString()}`, { cache: "no-store" });
       if (!res.ok) throw new Error();
       setMediciones(await res.json());
     } catch {

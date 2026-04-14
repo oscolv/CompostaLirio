@@ -48,7 +48,8 @@ export function FotoModal({ url, onClose, showOpenOriginal = false }: Props) {
       <img
         src={url}
         alt="Foto ampliada"
-        className="max-w-full max-h-full object-contain rounded-lg"
+        className="object-contain rounded-lg"
+        style={{ maxWidth: "95vw", maxHeight: "90vh" }}
         onClick={(e) => e.stopPropagation()}
       />
       {showOpenOriginal && (

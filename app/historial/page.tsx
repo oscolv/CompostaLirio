@@ -211,6 +211,19 @@ export default function Historial() {
   }
 
   const [downloading, setDownloading] = useState(false);
+  const [fotoModal, setFotoModal] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!fotoModal) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setFotoModal(null); };
+    window.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [fotoModal]);
 
   async function downloadCSV() {
     setDownloading(true);
@@ -337,9 +350,24 @@ export default function Historial() {
                 </div>
                 {m.foto_url && (
                   <div className="mt-2.5">
-                    <a href={m.foto_url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
-                      <img src={m.foto_url} alt={`Foto compostera #${m.compostera}`} className="w-full h-32 object-cover rounded-lg" />
-                    </a>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setFotoModal(m.foto_url); }}
+                      className="group relative w-20 h-20 rounded-lg overflow-hidden border border-white/60 shadow-sm active:scale-95 transition-transform"
+                      aria-label="Ver foto en grande"
+                    >
+                      <img
+                        src={m.foto_url}
+                        alt={`Foto compostera #${m.compostera}`}
+                        className="w-full h-full object-cover"
+                      />
+                      <span className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                        <svg className="w-5 h-5 text-white opacity-0 group-hover:opacity-100 drop-shadow transition-opacity" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+                        </svg>
+                      </span>
+                    </button>
                   </div>
                 )}
                 {(m.dia || m.observaciones) && (
@@ -364,15 +392,13 @@ export default function Historial() {
                         Editar
                       </button>
                       {m.foto_url && (
-                        <a
-                          href={m.foto_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={(e) => e.stopPropagation()}
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setFotoModal(m.foto_url); }}
                           className="px-3 py-1.5 rounded-lg text-[12px] font-semibold bg-blue-50 text-blue-600 hover:bg-blue-100 transition-all"
                         >
                           Ver foto
-                        </a>
+                        </button>
                       )}
                     </div>
                     <button
@@ -542,6 +568,39 @@ export default function Historial() {
           })}
         </div>
       </main>
+
+      {fotoModal && (
+        <div
+          onClick={() => setFotoModal(null)}
+          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4 animate-fade-in"
+          role="dialog"
+          aria-modal="true"
+        >
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setFotoModal(null); }}
+            className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 text-white text-2xl flex items-center justify-center hover:bg-white/20 transition-colors"
+            aria-label="Cerrar"
+          >
+            &times;
+          </button>
+          <img
+            src={fotoModal}
+            alt="Foto ampliada"
+            className="max-w-full max-h-full object-contain rounded-lg"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <a
+            href={fotoModal}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-full bg-white/10 text-white text-[12px] font-semibold hover:bg-white/20 transition-colors"
+          >
+            Abrir original
+          </a>
+        </div>
+      )}
     </div>
   );
 }

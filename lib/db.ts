@@ -349,23 +349,44 @@ export async function asociarFormulacionACompostera(
   notas?: string | null,
 ) {
   const sql = getSQL();
+
+  // Garantiza que la fila de la compostera exista (FK). El usuario puede
+  // abrir la pantalla de una compostera cuya config aún no se guardó.
+  await sql`
+    INSERT INTO composteras (id) VALUES (${compostera_id})
+    ON CONFLICT (id) DO NOTHING
+  `;
+
   await sql`
     UPDATE compostera_formulaciones
     SET es_actual = FALSE
     WHERE compostera_id = ${compostera_id} AND es_actual = TRUE
   `;
-  const rows = await sql`
-    INSERT INTO compostera_formulaciones (
-      compostera_id, formulacion_id, fecha_asociacion, es_actual, notas
-    ) VALUES (
-      ${compostera_id},
-      ${formulacion_id},
-      ${fecha ?? null}::date,
-      TRUE,
-      ${notas ?? null}
-    )
-    RETURNING *
-  `;
+  // Si no viene fecha, usar CURRENT_DATE del servidor (la columna es NOT NULL).
+  const rows = fecha
+    ? await sql`
+        INSERT INTO compostera_formulaciones (
+          compostera_id, formulacion_id, fecha_asociacion, es_actual, notas
+        ) VALUES (
+          ${compostera_id},
+          ${formulacion_id},
+          ${fecha}::date,
+          TRUE,
+          ${notas ?? null}
+        )
+        RETURNING *
+      `
+    : await sql`
+        INSERT INTO compostera_formulaciones (
+          compostera_id, formulacion_id, es_actual, notas
+        ) VALUES (
+          ${compostera_id},
+          ${formulacion_id},
+          TRUE,
+          ${notas ?? null}
+        )
+        RETURNING *
+      `;
   return rows[0];
 }
 

@@ -50,6 +50,7 @@ export async function POST(
     return NextResponse.json(row, { status: 201 });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : "Unknown error";
+    console.error("[asociar-formulacion] error:", e);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

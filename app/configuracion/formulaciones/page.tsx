@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import NextImage from "next/image";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 type Formulacion = {
   id: number;
@@ -61,14 +61,6 @@ const EMPTY_FORM: FormState = {
 function num(s: string): number {
   const n = Number(s);
   return Number.isFinite(n) ? n : 0;
-}
-
-function IconArrowLeft() {
-  return (
-    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
-    </svg>
-  );
 }
 
 function IconPlus() {
@@ -265,35 +257,15 @@ export default function FormulacionesPage() {
 
   return (
     <div className="min-h-screen bg-crema-100">
-      <header className="relative overflow-hidden text-white h-[26vh] min-h-[150px] max-h-[200px]">
-        <NextImage
-          src="/bojay.jpg"
-          alt="Ciénega de San Francisco Bojay"
-          fill
-          priority
-          sizes="(max-width: 480px) 100vw, 480px"
-          className="object-cover"
-        />
-        <div className="absolute inset-0 bg-gradient-to-b from-verde-950/70 via-verde-900/55 to-verde-950/85" />
-        <div className="relative z-10 h-full max-w-[480px] mx-auto px-5 py-4 flex flex-col justify-between">
-          <div>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-verde-100 drop-shadow-sm">
-              San Francisco Bojay
-            </div>
-            <h1 className="font-display text-[26px] font-black leading-tight tracking-tight mt-0.5 drop-shadow">
-              Formulaciones
-            </h1>
-          </div>
-          <Link
-            href="/configuracion"
-            className="flex items-center gap-1.5 text-[13px] font-medium text-verde-100 hover:text-white transition-colors"
-          >
-            <IconArrowLeft /> Volver a configuración
-          </Link>
-        </div>
-      </header>
+      <PageHeader
+        kicker="Bitácora · Sección IV.a"
+        title="Formulaciones."
+        subtitle="Recetas de mezcla registradas para las composteras. Cada receta combina lirio, estructurante y otros insumos."
+        backHref="/configuracion"
+        backLabel="Volver a configuración"
+      />
 
-      <main className="max-w-[480px] mx-auto px-4 py-5">
+      <main className="max-w-[960px] mx-auto px-5 md:px-8 py-8">
         {/* --- Botón nueva --- */}
         {!showForm && (
           <button

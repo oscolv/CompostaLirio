@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 
 type Props = {
   url: string | null;
@@ -10,6 +11,10 @@ type Props = {
 };
 
 export function FotoModal({ url, onClose, showOpenOriginal = false }: Props) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => { setMounted(true); }, []);
+
   useEffect(() => {
     if (!url) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -22,12 +27,12 @@ export function FotoModal({ url, onClose, showOpenOriginal = false }: Props) {
     };
   }, [url, onClose]);
 
-  if (!url) return null;
+  if (!url || !mounted) return null;
 
-  return (
+  return createPortal(
     <div
       onClick={onClose}
-      className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4 animate-fade-in"
+      className="fixed inset-0 z-[9999] bg-black/90 flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
     >
@@ -57,6 +62,7 @@ export function FotoModal({ url, onClose, showOpenOriginal = false }: Props) {
           Abrir original
         </a>
       )}
-    </div>
+    </div>,
+    document.body,
   );
 }

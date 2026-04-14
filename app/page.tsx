@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
-import Image from "next/image";
+import NextImage from "next/image";
 import Markdown from "react-markdown";
 
 type Status = { label: string; key: string; color: string; bg: string; ring: string };
@@ -360,7 +360,7 @@ export default function Home() {
       {/* Header con foto de la ciénega de Bojay — altura acotada para no empujar las acciones */}
       <header className="relative overflow-hidden text-white h-[34vh] min-h-[180px] max-h-[240px]">
         {/* Imagen de fondo optimizada por next/image */}
-        <Image
+        <NextImage
           src="/bojay.jpg"
           alt="Ciénega de San Francisco Bojay"
           fill

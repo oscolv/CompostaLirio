@@ -425,6 +425,44 @@ export async function getAllAsociacionesFormulacion() {
   `;
 }
 
+export async function updateFormulacion(id: number, data: FormulacionInput) {
+  const sql = getSQL();
+  const rows = await sql`
+    UPDATE formulaciones SET
+      nombre = ${data.nombre},
+      descripcion = ${data.descripcion ?? null},
+      base_calculo = ${data.base_calculo},
+      lirio_acuatico_pct = ${data.lirio_acuatico_pct ?? null},
+      excreta_pct = ${data.excreta_pct ?? null},
+      tipo_excreta = ${data.tipo_excreta ?? null},
+      hojarasca_pct = ${data.hojarasca_pct ?? null},
+      residuos_vegetales_pct = ${data.residuos_vegetales_pct ?? null},
+      material_estructurante_pct = ${data.material_estructurante_pct ?? null},
+      relacion_cn_estimada = ${data.relacion_cn_estimada ?? null},
+      humedad_inicial_estimada = ${data.humedad_inicial_estimada ?? null},
+      nivel_estructura = ${data.nivel_estructura ?? null},
+      notas = ${data.notas ?? null},
+      activa = ${data.activa ?? true}
+    WHERE id = ${id}
+    RETURNING *
+  `;
+  return rows[0] || null;
+}
+
+export async function deleteFormulacion(id: number) {
+  const sql = getSQL();
+  await sql`DELETE FROM formulaciones WHERE id = ${id}`;
+}
+
+export async function countAsociacionesDeFormulacion(formulacion_id: number) {
+  const sql = getSQL();
+  const rows = await sql`
+    SELECT COUNT(*)::int AS n FROM compostera_formulaciones
+    WHERE formulacion_id = ${formulacion_id}
+  `;
+  return Number(rows[0]?.n ?? 0);
+}
+
 export async function deleteAsociacionFormulacion(asociacion_id: number) {
   const sql = getSQL();
   await sql`DELETE FROM compostera_formulaciones WHERE id = ${asociacion_id}`;

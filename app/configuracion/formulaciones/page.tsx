@@ -86,6 +86,54 @@ export default function FormulacionesPage() {
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [mensaje, setMensaje] = useState("");
+  const [editId, setEditId] = useState<number | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+
+  function toFormState(f: Formulacion): FormState {
+    const s = (n: number | null) => (n == null ? "" : String(n));
+    return {
+      nombre: f.nombre,
+      descripcion: f.descripcion ?? "",
+      base_calculo: f.base_calculo,
+      lirio_acuatico_pct: s(f.lirio_acuatico_pct),
+      excreta_pct: s(f.excreta_pct),
+      tipo_excreta: (f.tipo_excreta as FormState["tipo_excreta"]) || "",
+      hojarasca_pct: s(f.hojarasca_pct),
+      residuos_vegetales_pct: s(f.residuos_vegetales_pct),
+      material_estructurante_pct: s(f.material_estructurante_pct),
+      relacion_cn_estimada: s(f.relacion_cn_estimada),
+      humedad_inicial_estimada: s(f.humedad_inicial_estimada),
+      nivel_estructura: (f.nivel_estructura as FormState["nivel_estructura"]) || "",
+      notas: f.notas ?? "",
+      activa: f.activa,
+    };
+  }
+
+  function editar(f: Formulacion) {
+    setEditId(f.id);
+    setForm(toFormState(f));
+    setMensaje("");
+    setShowForm(true);
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }
+
+  async function borrar(f: Formulacion) {
+    if (!confirm(`¿Eliminar la formulación "${f.nombre}"?`)) return;
+    setDeletingId(f.id);
+    setMensaje("");
+    try {
+      const r = await fetch(`/api/formulaciones/${f.id}`, { method: "DELETE" });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data?.error || "Error al eliminar");
+      await cargar();
+    } catch (e) {
+      setMensaje(e instanceof Error ? e.message : "Error");
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   const sumaPct =
     num(form.lirio_acuatico_pct) +
@@ -100,7 +148,7 @@ export default function FormulacionesPage() {
     setLoading(true);
     setError("");
     try {
-      const r = await fetch("/api/formulaciones");
+      const r = await fetch("/api/formulaciones?all=1", { cache: "no-store" });
       if (!r.ok) throw new Error("Error al cargar");
       const rows = (await r.json()) as Formulacion[];
       setLista(Array.isArray(rows) ? rows : []);
@@ -151,17 +199,21 @@ export default function FormulacionesPage() {
         activa: form.activa,
       };
 
-      const r = await fetch("/api/formulaciones", {
-        method: "POST",
+      const url = editId != null ? `/api/formulaciones/${editId}` : "/api/formulaciones";
+      const method = editId != null ? "PUT" : "POST";
+      const r = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
       const data = await r.json();
       if (!r.ok) throw new Error(data?.error || "Error al guardar");
 
+      const exito = editId != null ? "Formulación actualizada" : "Formulación creada";
       setForm(EMPTY_FORM);
+      setEditId(null);
       setShowForm(false);
-      setMensaje("Formulación creada");
+      setMensaje(exito);
       setTimeout(() => setMensaje(""), 2500);
       await cargar();
     } catch (e) {
@@ -207,6 +259,7 @@ export default function FormulacionesPage() {
           <button
             onClick={() => {
               setForm(EMPTY_FORM);
+              setEditId(null);
               setMensaje("");
               setShowForm(true);
             }}
@@ -219,7 +272,9 @@ export default function FormulacionesPage() {
         {/* --- Formulario --- */}
         {showForm && (
           <form onSubmit={guardar} className="page-card mb-5 flex flex-col gap-4">
-            <h2 className="text-[15px] font-semibold text-verde-900">Nueva formulación</h2>
+            <h2 className="text-[15px] font-semibold text-verde-900">
+              {editId != null ? "Editar formulación" : "Nueva formulación"}
+            </h2>
 
             {/* Identificación */}
             <div>
@@ -384,7 +439,9 @@ export default function FormulacionesPage() {
             {mensaje && (
               <div
                 className={`text-[13px] font-medium text-center ${
-                  mensaje === "Formulación creada" ? "text-verde-600" : "text-red-600"
+                  mensaje === "Formulación creada" || mensaje === "Formulación actualizada"
+                    ? "text-verde-600"
+                    : "text-red-600"
                 }`}
               >
                 {mensaje}
@@ -396,6 +453,8 @@ export default function FormulacionesPage() {
                 type="button"
                 onClick={() => {
                   setShowForm(false);
+                  setEditId(null);
+                  setForm(EMPTY_FORM);
                   setMensaje("");
                 }}
                 className="flex-1 px-4 py-3 rounded-xl border border-verde-200 text-verde-800 font-semibold text-[14px] bg-white active:scale-95 transition-transform"
@@ -422,6 +481,18 @@ export default function FormulacionesPage() {
 
         {error && (
           <div className="page-card border-red-200 bg-red-50 text-[14px] text-red-700">{error}</div>
+        )}
+
+        {!showForm && mensaje && (
+          <div
+            className={`page-card text-[13px] font-medium text-center mb-3 ${
+              mensaje === "Formulación creada" || mensaje === "Formulación actualizada"
+                ? "border-verde-200 bg-verde-50 text-verde-700"
+                : "border-red-200 bg-red-50 text-red-700"
+            }`}
+          >
+            {mensaje}
+          </div>
         )}
 
         {!loading && !error && lista.length === 0 && !showForm && (
@@ -469,6 +540,24 @@ export default function FormulacionesPage() {
                   {f.notas}
                 </p>
               )}
+
+              <div className="flex gap-2 mt-3 pt-2 border-t border-verde-50">
+                <button
+                  type="button"
+                  onClick={() => editar(f)}
+                  className="flex-1 px-3 py-2 rounded-lg border border-verde-200 text-verde-800 font-semibold text-[12px] bg-white active:scale-95 transition-transform"
+                >
+                  Editar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => borrar(f)}
+                  disabled={deletingId === f.id}
+                  className="flex-1 px-3 py-2 rounded-lg border border-red-200 text-red-600 font-semibold text-[12px] bg-white active:scale-95 transition-transform disabled:opacity-50"
+                >
+                  {deletingId === f.id ? "Eliminando..." : "Borrar"}
+                </button>
+              </div>
             </article>
           ))}
         </div>

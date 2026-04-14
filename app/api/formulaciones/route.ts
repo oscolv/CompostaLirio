@@ -3,13 +3,18 @@ import {
   ensureTable,
   createFormulacion,
   getFormulaciones,
+  getAllFormulaciones,
   type FormulacionInput,
 } from "@/lib/db";
 
-export async function GET() {
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+export async function GET(req: NextRequest) {
   try {
     await ensureTable();
-    const rows = await getFormulaciones();
+    const all = new URL(req.url).searchParams.get("all") === "1";
+    const rows = all ? await getAllFormulaciones() : await getFormulaciones();
     return NextResponse.json(rows);
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : "Unknown error";

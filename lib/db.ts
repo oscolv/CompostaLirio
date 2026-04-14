@@ -327,9 +327,12 @@ export async function createFormulacion(data: FormulacionInput) {
 export async function getFormulaciones() {
   const sql = getSQL();
   return sql`
-    SELECT * FROM formulaciones
-    WHERE activa = TRUE
-    ORDER BY created_at DESC
+    SELECT f.*,
+      (SELECT COUNT(*)::int FROM compostera_formulaciones cf
+        WHERE cf.formulacion_id = f.id) AS n_asociaciones
+    FROM formulaciones f
+    WHERE f.activa = TRUE
+    ORDER BY f.created_at DESC
   `;
 }
 
@@ -412,7 +415,13 @@ export async function getFormulacionesDeCompostera(compostera_id: number) {
 // Devuelve todas las formulaciones (activas e inactivas), útil para análisis.
 export async function getAllFormulaciones() {
   const sql = getSQL();
-  return sql`SELECT * FROM formulaciones ORDER BY id`;
+  return sql`
+    SELECT f.*,
+      (SELECT COUNT(*)::int FROM compostera_formulaciones cf
+        WHERE cf.formulacion_id = f.id) AS n_asociaciones
+    FROM formulaciones f
+    ORDER BY f.id
+  `;
 }
 
 // Devuelve todas las asociaciones compostera-formulación.

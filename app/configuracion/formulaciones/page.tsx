@@ -21,6 +21,7 @@ type Formulacion = {
   notas: string | null;
   activa: boolean;
   created_at: string;
+  n_asociaciones: number;
 };
 
 type FormState = {
@@ -127,6 +128,45 @@ export default function FormulacionesPage() {
       const r = await fetch(`/api/formulaciones/${f.id}`, { method: "DELETE" });
       const data = await r.json();
       if (!r.ok) throw new Error(data?.error || "Error al eliminar");
+      await cargar();
+    } catch (e) {
+      setMensaje(e instanceof Error ? e.message : "Error");
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  async function toggleActiva(f: Formulacion) {
+    const accion = f.activa ? "desactivar" : "reactivar";
+    if (f.activa && !confirm(
+      `Desactivar "${f.nombre}". Dejará de aparecer en el selector de nuevas asociaciones, pero el historial y los diagnósticos la seguirán citando. ¿Continuar?`,
+    )) return;
+    setDeletingId(f.id);
+    setMensaje("");
+    try {
+      const payload = {
+        nombre: f.nombre,
+        descripcion: f.descripcion,
+        base_calculo: f.base_calculo,
+        lirio_acuatico_pct: f.lirio_acuatico_pct,
+        excreta_pct: f.excreta_pct,
+        tipo_excreta: f.tipo_excreta,
+        hojarasca_pct: f.hojarasca_pct,
+        residuos_vegetales_pct: f.residuos_vegetales_pct,
+        material_estructurante_pct: f.material_estructurante_pct,
+        relacion_cn_estimada: f.relacion_cn_estimada,
+        humedad_inicial_estimada: f.humedad_inicial_estimada,
+        nivel_estructura: f.nivel_estructura,
+        notas: f.notas,
+        activa: !f.activa,
+      };
+      const r = await fetch(`/api/formulaciones/${f.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data?.error || `Error al ${accion}`);
       await cargar();
     } catch (e) {
       setMensaje(e instanceof Error ? e.message : "Error");
@@ -541,6 +581,12 @@ export default function FormulacionesPage() {
                 </p>
               )}
 
+              {f.n_asociaciones > 0 && (
+                <p className="mt-2 text-[11px] text-gray-500">
+                  Usada en {f.n_asociaciones} compostera{f.n_asociaciones === 1 ? "" : "s"}.
+                </p>
+              )}
+
               <div className="flex gap-2 mt-3 pt-2 border-t border-verde-50">
                 <button
                   type="button"
@@ -549,14 +595,34 @@ export default function FormulacionesPage() {
                 >
                   Editar
                 </button>
-                <button
-                  type="button"
-                  onClick={() => borrar(f)}
-                  disabled={deletingId === f.id}
-                  className="flex-1 px-3 py-2 rounded-lg border border-red-200 text-red-600 font-semibold text-[12px] bg-white active:scale-95 transition-transform disabled:opacity-50"
-                >
-                  {deletingId === f.id ? "Eliminando..." : "Borrar"}
-                </button>
+                {!f.activa ? (
+                  <button
+                    type="button"
+                    onClick={() => toggleActiva(f)}
+                    disabled={deletingId === f.id}
+                    className="flex-1 px-3 py-2 rounded-lg border border-verde-300 text-verde-700 font-semibold text-[12px] bg-white active:scale-95 transition-transform disabled:opacity-50"
+                  >
+                    {deletingId === f.id ? "..." : "Reactivar"}
+                  </button>
+                ) : f.n_asociaciones > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => toggleActiva(f)}
+                    disabled={deletingId === f.id}
+                    className="flex-1 px-3 py-2 rounded-lg border border-amber-300 text-amber-700 font-semibold text-[12px] bg-white active:scale-95 transition-transform disabled:opacity-50"
+                  >
+                    {deletingId === f.id ? "..." : "Desactivar"}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => borrar(f)}
+                    disabled={deletingId === f.id}
+                    className="flex-1 px-3 py-2 rounded-lg border border-red-200 text-red-600 font-semibold text-[12px] bg-white active:scale-95 transition-transform disabled:opacity-50"
+                  >
+                    {deletingId === f.id ? "Eliminando..." : "Borrar"}
+                  </button>
+                )}
               </div>
             </article>
           ))}

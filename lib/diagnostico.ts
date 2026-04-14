@@ -1,4 +1,24 @@
-import { getMedicionesExport } from "./db";
+import { getMedicionesExport, getFormulacionActual, getFormulacionesDeCompostera } from "./db";
+
+type FormulacionRow = {
+  asociacion_id: number;
+  formulacion_id: number;
+  fecha_asociacion: string;
+  es_actual: boolean;
+  asociacion_notas: string | null;
+  nombre: string;
+  descripcion: string | null;
+  base_calculo: string;
+  lirio_acuatico_pct: number | null;
+  excreta_pct: number | null;
+  tipo_excreta: string | null;
+  hojarasca_pct: number | null;
+  residuos_vegetales_pct: number | null;
+  material_estructurante_pct: number | null;
+  relacion_cn_estimada: number | null;
+  humedad_inicial_estimada: number | null;
+  nivel_estructura: string | null;
+};
 
 type MedicionRow = {
   id: number;
@@ -117,6 +137,49 @@ export async function buildResumenHistorico(compostera: number): Promise<string 
   if (flags.length > 0) {
     resumen += `\n\nFlags técnicas:`;
     flags.forEach((f) => { resumen += `\n- ⚠ ${f}`; });
+  }
+
+  // --- Formulaciones ---
+  try {
+    const actual = (await getFormulacionActual(compostera)) as FormulacionRow | null;
+    const historial = (await getFormulacionesDeCompostera(compostera)) as FormulacionRow[];
+
+    if (actual) {
+      resumen += `\n\nFormulación actual:`;
+      resumen += `\n- Nombre: ${actual.nombre}`;
+      if (actual.descripcion) resumen += `\n- Descripción: ${actual.descripcion}`;
+      resumen += `\n- Base de cálculo: ${actual.base_calculo}`;
+      const comp: string[] = [];
+      if (actual.lirio_acuatico_pct != null)        comp.push(`lirio ${actual.lirio_acuatico_pct}%`);
+      if (actual.excreta_pct != null)               comp.push(`excreta ${actual.excreta_pct}%`);
+      if (actual.hojarasca_pct != null)             comp.push(`hojarasca ${actual.hojarasca_pct}%`);
+      if (actual.residuos_vegetales_pct != null)    comp.push(`residuos vegetales ${actual.residuos_vegetales_pct}%`);
+      if (actual.material_estructurante_pct != null) comp.push(`estructurante ${actual.material_estructurante_pct}%`);
+      if (comp.length) resumen += `\n- Composición: ${comp.join(", ")}`;
+      if (actual.tipo_excreta)             resumen += `\n- Tipo de excreta: ${actual.tipo_excreta}`;
+      if (actual.relacion_cn_estimada != null)     resumen += `\n- Relación C/N estimada: ${actual.relacion_cn_estimada}`;
+      if (actual.humedad_inicial_estimada != null) resumen += `\n- Humedad inicial estimada: ${actual.humedad_inicial_estimada}%`;
+      if (actual.nivel_estructura)         resumen += `\n- Nivel de estructura: ${actual.nivel_estructura}`;
+      if (actual.asociacion_notas)         resumen += `\n- Notas de asociación: ${actual.asociacion_notas}`;
+    } else {
+      resumen += `\n\nFormulación actual: no registrada`;
+    }
+
+    if (historial.length > 0) {
+      resumen += `\n\nHistorial de formulaciones:`;
+      // ordenadas por fecha descendente desde DB; mostramos en orden cronológico creciente
+      const ordenadas = [...historial].reverse();
+      ordenadas.forEach((h) => {
+        const fecha = new Date(h.fecha_asociacion).toLocaleDateString("es-MX", {
+          day: "numeric", month: "short", year: "numeric",
+          timeZone: "America/Mexico_City",
+        });
+        resumen += `\n- ${fecha}: ${h.nombre}${h.es_actual ? " (actual)" : ""}`;
+      });
+    }
+  } catch (e) {
+    // Si la consulta de formulaciones falla, no bloquear el diagnóstico
+    console.error("[diagnostico] formulaciones:", e);
   }
 
   return resumen;

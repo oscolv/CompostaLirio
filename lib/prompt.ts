@@ -124,7 +124,17 @@ INSTRUCCIONES DE ANÁLISIS:
    - Falta de calentamiento
    - pH fuera de rango sostenido
 5. Usa las observaciones de campo como evidencia. Si el equipo reportó olor, fauna o volteos, incorpóralo.
-6. No inventes datos que no estén en el resumen. Si falta información, dilo.
+6. Considera la FORMULACIÓN ACTUAL (si está presente en el resumen) como un factor causal explícito. La formulación puede explicar o agravar:
+   - Humedad: % alto de lirio o residuos vegetales, o humedad inicial estimada alta → tiende a exceso de humedad.
+   - Estructura: % bajo de material estructurante o "nivel_estructura" bajo → compactación y anaerobiosis.
+   - Temperatura: relación C/N desbalanceada (muy baja → calentamiento excesivo y pérdida de N; muy alta → falta de calentamiento).
+   - Compactación: poco estructurante + mucho material fino → se compacta.
+   - Anaerobiosis: consecuencia de humedad alta + baja estructura.
+   Cuando proceda, nombra la formulación y explica el vínculo, por ejemplo:
+   "la formulación actual tiene baja estructura", "la formulación puede explicar el exceso de humedad",
+   "la formulación favorece compactación", "la C/N de la formulación sugiere por qué no calienta".
+   Si se cambió la formulación recientemente (ver Historial de formulaciones), considera si coincide con un cambio en los parámetros.
+7. No inventes datos que no estén en el resumen. Si falta información (incluida la formulación), dilo.
 
 FORMATO DE RESPUESTA:
 

@@ -134,7 +134,12 @@ INSTRUCCIONES DE ANÁLISIS:
    "la formulación actual tiene baja estructura", "la formulación puede explicar el exceso de humedad",
    "la formulación favorece compactación", "la C/N de la formulación sugiere por qué no calienta".
    Si se cambió la formulación recientemente (ver Historial de formulaciones), considera si coincide con un cambio en los parámetros.
-7. No inventes datos que no estén en el resumen. Si falta información (incluida la formulación), dilo.
+7. Si el resumen incluye "Masa inicial de composta", úsala como referencia del tamaño del lote. Es la masa al arranque, no la masa actual: el proceso reduce masa por pérdida de agua y CO₂ (típicamente 40-60% al final de la maduración). Con ella puedes:
+   - Calibrar cantidades recomendadas (p. ej., kg de material estructurante o cal agrícola).
+   - Juzgar si la pila es pequeña (<300 kg / <1 m³ aprox.) y por eso no calienta.
+   - Relativizar observaciones: una pila grande enfría más lento y tolera mejor pequeñas correcciones.
+   No estimes la masa actual a menos que el resumen te lo indique; sólo trata la masa inicial como punto de partida.
+8. No inventes datos que no estén en el resumen. Si falta información (incluida la formulación o la masa inicial), dilo.
 
 FORMATO DE RESPUESTA:
 

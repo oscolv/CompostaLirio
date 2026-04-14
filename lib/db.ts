@@ -174,6 +174,12 @@ export async function getComposteras() {
   return sql`SELECT * FROM composteras ORDER BY id`;
 }
 
+export async function getComposteraById(id: number) {
+  const sql = getSQL();
+  const rows = await sql`SELECT * FROM composteras WHERE id = ${id}`;
+  return rows[0] || null;
+}
+
 export async function insertConsulta(data: {
   tipo: string;
   compostera: number | null;

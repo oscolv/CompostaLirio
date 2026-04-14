@@ -1,4 +1,17 @@
-import { getMedicionesExport, getFormulacionActual, getFormulacionesDeCompostera } from "./db";
+import {
+  getMedicionesExport,
+  getFormulacionActual,
+  getFormulacionesDeCompostera,
+  getComposteraById,
+} from "./db";
+
+type ComposteraRow = {
+  id: number;
+  nombre: string | null;
+  fecha_inicio: string | null;
+  activa: boolean;
+  masa_inicial: number | null;
+};
 
 type FormulacionRow = {
   asociacion_id: number;
@@ -108,8 +121,20 @@ export async function buildResumenHistorico(compostera: number): Promise<string 
   const tempsBajo = rows.filter((r) => r.dia && r.dia > 7 && r.temperatura < 45).length;
   if (tempsBajo > 3) flags.push(`${tempsBajo} registros con temp <45°C después de día 7 (posible falta de calentamiento)`);
 
+  // Datos de la compostera (incluye masa inicial)
+  let comp: ComposteraRow | null = null;
+  try {
+    comp = (await getComposteraById(compostera)) as ComposteraRow | null;
+  } catch (e) {
+    console.error("[diagnostico] compostera:", e);
+  }
+
   let resumen = `RESUMEN HISTÓRICO DE COMPOSTERA #${compostera}`;
   resumen += `\n\nDatos generales:`;
+  if (comp?.nombre) resumen += `\n- Nombre: ${comp.nombre}`;
+  if (comp?.masa_inicial != null) {
+    resumen += `\n- Masa inicial de composta: ${comp.masa_inicial} kg (referencia al inicio del proceso; irá disminuyendo conforme avanza la descomposición)`;
+  }
   resumen += `\n- Total de registros: ${total}`;
   resumen += `\n- Periodo: ${diasSpan} días (${primera.toLocaleDateString("es-MX", { timeZone: "America/Mexico_City" })} a ${ultima.toLocaleDateString("es-MX", { timeZone: "America/Mexico_City" })})`;
   if (diaActual) resumen += `\n- Día actual del proceso: ${diaActual}`;

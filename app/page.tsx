@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
+import NextImage from "next/image";
 import Markdown from "react-markdown";
 
 type Status = { label: string; key: string; color: string; bg: string; ring: string };
@@ -356,31 +357,46 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-crema-100">
-      {/* Header */}
-      <header className="bg-gradient-to-br from-verde-800 to-verde-950 px-5 py-6 text-white relative overflow-hidden">
-        <div className="absolute -top-8 -right-4 text-[140px] opacity-[0.06] leading-none select-none rotate-12">
-          {"\u{1F33F}"}
-        </div>
-        <div className="relative">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-verde-200 mb-1.5">
-            San Francisco Bojay
+      {/* Header con foto de la ciénega de Bojay — altura acotada para no empujar las acciones */}
+      <header className="relative overflow-hidden text-white h-[34vh] min-h-[180px] max-h-[240px]">
+        {/* Imagen de fondo optimizada por next/image */}
+        <NextImage
+          src="/bojay.jpg"
+          alt="Ciénega de San Francisco Bojay"
+          fill
+          priority
+          sizes="(max-width: 480px) 100vw, 480px"
+          className="object-cover"
+        />
+        {/* Overlay oscuro para asegurar contraste del texto */}
+        <div className="absolute inset-0 bg-gradient-to-b from-verde-950/70 via-verde-900/55 to-verde-950/85" />
+
+        <div className="relative z-10 h-full max-w-[480px] mx-auto px-5 py-4 flex flex-col justify-between">
+          <div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-verde-100 drop-shadow-sm">
+              San Francisco Bojay
+            </div>
+            <h1 className="font-display text-[26px] font-black leading-tight tracking-tight mt-0.5 drop-shadow">
+              Agente de Composta
+            </h1>
+            <p className="text-[12px] leading-snug text-verde-50/90 mt-1 max-w-[320px] drop-shadow-sm">
+              Sistema de monitoreo y diagnóstico de compostaje de lirio acuático
+            </p>
           </div>
-          <h1 className="font-display text-[28px] font-black leading-tight tracking-tight">
-            Agente de Composta
-          </h1>
-          <nav className="flex items-center gap-4 mt-3 text-[13px] font-medium text-verde-200">
+
+          <nav className="flex items-center gap-4 text-[13px] font-medium text-verde-100">
             <Link href="/historial" className="hover:text-white transition-colors">
               Historial
             </Link>
-            <span className="w-px h-3 bg-verde-600" />
+            <span className="w-px h-3 bg-verde-200/40" />
             <Link href="/consultas" className="hover:text-white transition-colors">
               Consultas
             </Link>
-            <span className="w-px h-3 bg-verde-600" />
+            <span className="w-px h-3 bg-verde-200/40" />
             <Link href="/configuracion" className="hover:text-white transition-colors">
               Config
             </Link>
-            <span className="w-px h-3 bg-verde-600" />
+            <span className="w-px h-3 bg-verde-200/40" />
             <button
               onClick={async () => {
                 await fetch("/api/auth/logout", { method: "POST" });

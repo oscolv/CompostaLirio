@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { PageHeader } from "@/components/ui/PageHeader";
+import NextImage from "next/image";
 
 type Compostera = {
   id: number;
@@ -14,7 +14,11 @@ type Compostera = {
 
 function defaultComposteras(): Compostera[] {
   return Array.from({ length: 10 }, (_, i) => ({
-    id: i + 1, nombre: "", fecha_inicio: "", activa: true, masa_inicial: "",
+    id: i + 1,
+    nombre: "",
+    fecha_inicio: "",
+    activa: true,
+    masa_inicial: "",
   }));
 }
 
@@ -24,6 +28,22 @@ function diasDesde(fecha: string): number | null {
   const hoy = new Date();
   hoy.setHours(0, 0, 0, 0);
   return Math.floor((hoy.getTime() - inicio.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+}
+
+function IconArrowLeft() {
+  return (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+    </svg>
+  );
+}
+
+function IconLeaf() {
+  return (
+    <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+      <path d="M17 8C8 10 5.9 16.17 3.82 21.34l1.89.66.95-2.71c.15-.43.31-.85.49-1.26C8.1 19.83 10.28 21 13 21c5.5 0 9-3.5 9-9V3l-1-.5C21 2.5 17 2 17 8zm-4 11c-1.78 0-3.35-.65-4.59-1.76C10.77 13.83 14.53 11.29 17 10c-2.49 1.29-5.36 4.07-6.81 7.25-.23-.48-.39-.98-.39-1.5 0-1.5.89-2.83 2.2-3.42.68-.3 1.42-.47 2.16-.49C16 11 17 10 17 8s2-4 4-4v4c0 4.5-3.5 8-8 8z" />
+    </svg>
+  );
 }
 
 export default function Configuracion() {
@@ -86,176 +106,181 @@ export default function Configuracion() {
         setMensaje("Error al guardar");
       }
     } catch {
-      setMensaje("Error de conexión");
+      setMensaje("Error de conexi\u00f3n");
     }
     setSaving(false);
   }
 
-  const masaTotal = composteras
-    .reduce((acc, c) => { const n = Number(c.masa_inicial); return acc + (Number.isFinite(n) ? n : 0); }, 0);
-
   return (
-    <div className="min-h-screen pb-24">
-      <PageHeader
-        kicker="Bitácora · Sección IV"
-        title="Configuración."
-        subtitle="Gestiona tus composteras: nombre, fecha de inicio, masa y estado. La app calcula el día del proceso automáticamente."
-        folio={`${composteras.filter((c) => c.activa).length} ACTIVAS · ${masaTotal.toLocaleString("es-MX")} KG`}
-        nav={[
-          { href: "/", label: "Índice" },
-          { href: "/historial", label: "Historial" },
-          { href: "/consultas", label: "Consultas" },
-          { href: "/configuracion", label: "Configuración", active: true },
-        ]}
-      />
+    <div className="min-h-screen bg-crema-100">
+      <header className="relative overflow-hidden text-white h-[26vh] min-h-[150px] max-h-[200px]">
+        <NextImage
+          src="/bojay.jpg"
+          alt="Ciénega de San Francisco Bojay"
+          fill
+          priority
+          sizes="(max-width: 480px) 100vw, 480px"
+          className="object-cover"
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-verde-950/70 via-verde-900/55 to-verde-950/85" />
+        <div className="relative z-10 h-full max-w-[480px] mx-auto px-5 py-4 flex flex-col justify-between">
+          <div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-verde-100 drop-shadow-sm">
+              San Francisco Bojay
+            </div>
+            <h1 className="font-display text-[26px] font-black leading-tight tracking-tight mt-0.5 drop-shadow">
+              Configuraci&oacute;n
+            </h1>
+          </div>
+          <Link href="/" className="flex items-center gap-1.5 text-[13px] font-medium text-verde-100 hover:text-white transition-colors">
+            <IconArrowLeft /> Volver al monitor
+          </Link>
+        </div>
+      </header>
 
-      <main className="max-w-[960px] mx-auto px-5 md:px-8 py-8 md:py-10">
+      <main className="max-w-[480px] mx-auto px-4 py-5">
         <Link
           href="/configuracion/formulaciones"
-          className="group flex items-center justify-between p-5 rounded-md bg-papel-50 border border-tinta-900/10 mb-6 transition-all hover:border-tinta-600 hover:-translate-y-0.5 hover:shadow-card-hover"
+          className="page-card flex items-center justify-between mb-4 transition-shadow hover:shadow-card-hover active:scale-[0.98]"
         >
           <div>
-            <div className="kicker">Catálogo</div>
-            <div className="font-display text-[20px] font-black text-tinta-900 leading-tight mt-1">
-              Formulaciones
-            </div>
-            <div className="text-[13px] text-tinta-600 leading-snug mt-1">
-              Recetas de mezcla (lirio + estructurante + otros insumos)
+            <div className="text-[15px] font-semibold text-verde-900">Formulaciones</div>
+            <div className="text-[12px] text-gray-400 leading-snug">
+              Gestionar recetas de mezcla de composta
             </div>
           </div>
-          <span className="text-tinta-700 text-2xl leading-none transition-transform group-hover:translate-x-1">→</span>
+          <span className="text-verde-700 text-xl leading-none">→</span>
         </Link>
 
-        <div className="flex items-baseline justify-between mb-4">
-          <div>
-            <div className="kicker">Composteras</div>
-            <h2 className="font-display text-[28px] font-black text-tinta-900 leading-tight mt-1">
-              Parque de unidades
-            </h2>
-          </div>
-          <div className="hidden sm:block font-mono text-[11px] text-tinta-500 tabular-nums">
-            {composteras.length} UNIDADES
-          </div>
-        </div>
+        <div className="page-card">
+          <h2 className="text-[15px] font-semibold text-verde-900 mb-1">Composteras</h2>
+          <p className="text-[13px] text-gray-400 mb-5 leading-snug">
+            Configura la fecha de inicio de cada compostera. La app calcula autom&aacute;ticamente el d&iacute;a del proceso.
+          </p>
 
-        {loading ? (
-          <div className="text-center text-tinta-600 py-16 text-[12px] uppercase tracking-kicker font-semibold animate-pulse-fade">
-            Cargando…
-          </div>
-        ) : (
-          <div className="grid md:grid-cols-2 gap-3">
-            {composteras.map((c) => {
-              const dias = diasDesde(c.fecha_inicio);
-              return (
-                <div
-                  key={c.id}
-                  className={`relative rounded-md p-4 border transition-all ${
-                    c.activa
-                      ? "border-tinta-900/15 bg-papel-50"
-                      : "border-tinta-900/5 bg-papel-200/30 opacity-60"
-                  }`}
-                >
-                  <div className={`absolute left-0 top-3 bottom-3 w-[3px] rounded-sm ${c.activa ? "bg-tinta-600" : "bg-tinta-200"}`} />
-                  <div className="pl-2 flex items-start justify-between mb-3">
-                    <div>
-                      <div className="font-mono text-[10.5px] text-tinta-500 tabular-nums">
-                        N.º {String(c.id).padStart(2, "0")}
-                      </div>
-                      <div className="font-display text-[17px] font-semibold text-tinta-900 leading-tight">
-                        {c.nombre || `Compostera ${c.id}`}
-                      </div>
-                      {dias !== null && (
-                        <div className="font-mono text-[11px] text-ocre-600 mt-1 tabular-nums">
-                          D {dias} · día del proceso
-                        </div>
-                      )}
-                    </div>
-                    <label className="flex items-center gap-1.5 text-[10.5px] uppercase tracking-kicker text-tinta-500 cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={c.activa}
-                        onChange={(e) => update(c.id, "activa", e.target.checked)}
-                        className="w-4 h-4 accent-tinta-800 rounded-xs"
-                      />
-                      Activa
-                    </label>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2 pl-2">
-                    <div>
-                      <label className="input-label">Nombre</label>
-                      <input
-                        type="text"
-                        placeholder="Ej: Pila norte"
-                        value={c.nombre}
-                        onChange={(e) => update(c.id, "nombre", e.target.value)}
-                        className="input-field text-[13px] py-2"
-                      />
-                    </div>
-                    <div>
-                      <label className="input-label">Fecha inicio</label>
-                      <input
-                        type="date"
-                        value={c.fecha_inicio}
-                        onChange={(e) => update(c.id, "fecha_inicio", e.target.value)}
-                        className="input-field text-[13px] py-2"
-                      />
-                    </div>
-                    <div className="col-span-2">
-                      <label className="input-label">Masa inicial (kg)</label>
-                      <input
-                        type="number"
-                        inputMode="decimal"
-                        min="0" step="0.1"
-                        placeholder="200"
-                        value={c.masa_inicial}
-                        onChange={(e) => update(c.id, "masa_inicial", e.target.value)}
-                        className="input-field text-[13px] py-2 font-mono"
-                      />
-                    </div>
-                  </div>
-
-                  <Link
-                    href={`/configuracion/composteras/${c.id}`}
-                    className="mt-3 ml-2 inline-flex items-center justify-between w-[calc(100%-0.5rem)] text-[11px] font-semibold uppercase tracking-kicker text-tinta-700 hover:text-arcilla-600 transition-colors"
+          {loading ? (
+            <div className="text-center text-verde-600 py-12 text-[14px] animate-pulse-fade">
+              Cargando...
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {composteras.map((c) => {
+                const dias = diasDesde(c.fecha_inicio);
+                return (
+                  <div
+                    key={c.id}
+                    className={`rounded-xl p-3.5 border transition-all duration-200 ${
+                      c.activa
+                        ? "border-verde-200/60 bg-verde-50/30"
+                        : "border-gray-200 bg-gray-50 opacity-50"
+                    }`}
                   >
-                    <span>Detalle y formulaciones</span>
-                    <span className="transition-transform group-hover:translate-x-0.5">→</span>
-                  </Link>
-                </div>
-              );
-            })}
-          </div>
-        )}
+                    <div className="flex items-center justify-between mb-2.5">
+                      <div className="flex items-center gap-2">
+                        <span className={`w-2 h-2 rounded-full ${c.activa ? "bg-verde-500" : "bg-gray-300"}`} />
+                        <span className="font-semibold text-[14px] text-verde-900">#{c.id}</span>
+                        {dias !== null && (
+                          <span className="flex items-center gap-1 text-[11px] font-medium text-verde-600 bg-verde-100 px-2 py-0.5 rounded-full">
+                            <IconLeaf />
+                            D&iacute;a {dias}
+                          </span>
+                        )}
+                      </div>
+                      <label className="flex items-center gap-2 text-[12px] text-gray-400 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={c.activa}
+                          onChange={(e) => update(c.id, "activa", e.target.checked)}
+                          className="w-4 h-4 accent-verde-700 rounded"
+                        />
+                        Activa
+                      </label>
+                    </div>
 
-        {!loading && (
-          <div className="mt-6 relative rounded-md border border-tinta-900/12 bg-tinta-900 text-papel-100 px-5 py-4 flex items-center justify-between">
-            <div>
-              <div className="kicker text-papel-200/70">Masa total en proceso</div>
-              <div className="text-[12px] text-papel-200/60 mt-1">
-                Suma de masa inicial declarada en todas las composteras.
-              </div>
-            </div>
-            <div className="font-mono text-[32px] font-semibold text-papel-50 tabular-nums leading-none">
-              {masaTotal.toLocaleString("es-MX", { maximumFractionDigits: 2 })}
-              <span className="text-[14px] text-papel-200/60 ml-1.5">kg</span>
-            </div>
-          </div>
-        )}
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[10px] font-semibold text-verde-700/50 uppercase tracking-wider block mb-1">
+                          Nombre
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="Ej: Pila norte"
+                          value={c.nombre}
+                          onChange={(e) => update(c.id, "nombre", e.target.value)}
+                          className="w-full px-2.5 py-2 border border-verde-200/50 rounded-lg text-[13px] bg-white outline-none focus:border-verde-400 transition-colors"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-semibold text-verde-700/50 uppercase tracking-wider block mb-1">
+                          Fecha de inicio
+                        </label>
+                        <input
+                          type="date"
+                          value={c.fecha_inicio}
+                          onChange={(e) => update(c.id, "fecha_inicio", e.target.value)}
+                          className="w-full px-2.5 py-2 border border-verde-200/50 rounded-lg text-[13px] bg-white outline-none focus:border-verde-400 transition-colors"
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <label className="text-[10px] font-semibold text-verde-700/50 uppercase tracking-wider block mb-1">
+                          Masa inicial (kg)
+                        </label>
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          min="0"
+                          step="0.1"
+                          placeholder="Ej: 200"
+                          value={c.masa_inicial}
+                          onChange={(e) => update(c.id, "masa_inicial", e.target.value)}
+                          className="w-full px-2.5 py-2 border border-verde-200/50 rounded-lg text-[13px] bg-white outline-none focus:border-verde-400 transition-colors"
+                        />
+                      </div>
+                    </div>
 
-        <div className="sticky bottom-4 mt-6">
-          <button onClick={guardar} disabled={saving} className="btn-primary">
-            {saving ? "Guardando…" : "Guardar configuración"}
-          </button>
+                    <Link
+                      href={`/configuracion/composteras/${c.id}`}
+                      className="mt-3 flex items-center justify-between text-[12px] font-medium text-verde-700 hover:text-verde-900 transition-colors"
+                    >
+                      <span>Formulaciones y detalle</span>
+                      <span className="text-base leading-none">→</span>
+                    </Link>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {!loading && (
+            <div className="mt-5 rounded-xl border border-verde-200/60 bg-verde-50/60 px-4 py-3 flex items-center justify-between">
+              <span className="text-[12px] font-semibold text-verde-700 uppercase tracking-wider">
+                Masa total de composta
+              </span>
+              <span className="text-[18px] font-bold text-verde-900 tabular-nums">
+                {composteras
+                  .reduce((acc, c) => {
+                    const n = Number(c.masa_inicial);
+                    return acc + (Number.isFinite(n) ? n : 0);
+                  }, 0)
+                  .toLocaleString("es-MX", { maximumFractionDigits: 2 })} kg
+              </span>
+            </div>
+          )}
+
+          <div className="sticky bottom-4 mt-5">
+            <button onClick={guardar} disabled={saving} className="btn-primary">
+              {saving ? "Guardando..." : "Guardar configuraci\u00f3n"}
+            </button>
+          </div>
+
+          {mensaje && (
+            <div className={`text-center text-[13px] font-medium mt-3 animate-fade-in ${
+              mensaje === "Guardado" ? "text-verde-600" : "text-red-600"
+            }`}>
+              {mensaje === "Guardado" ? "\u2713 Guardado correctamente" : "\u2717 " + mensaje}
+            </div>
+          )}
         </div>
-
-        {mensaje && (
-          <div className={`text-center text-[11.5px] font-semibold uppercase tracking-kicker mt-3 animate-fade-in ${
-            mensaje === "Guardado" ? "text-tinta-700" : "text-arcilla-600"
-          }`}>
-            {mensaje === "Guardado" ? "✓ Guardado correctamente" : "✗ " + mensaje}
-          </div>
-        )}
       </main>
     </div>
   );

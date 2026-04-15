@@ -2,14 +2,14 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
+import NextImage from "next/image";
 import type { Medicion } from "@/lib/types";
 import { estadoCardConfig, getEstadoSimple } from "@/lib/estado";
 import { humedadLabel } from "@/lib/humedad";
 import { uploadFoto } from "@/lib/foto";
-import { IconDownload, IconCamera } from "@/components/ui/icons";
+import { IconArrowLeft, IconDownload, IconCamera } from "@/components/ui/icons";
 import { FotoModal } from "@/components/ui/FotoModal";
 import { AnalisisBadge } from "@/components/ui/AnalisisBadge";
-import { PageHeader } from "@/components/ui/PageHeader";
 import { useImageAnalysis } from "@/hooks/useImageAnalysis";
 import { useFotoModal } from "@/hooks/useFotoModal";
 import { TemperatureChart } from "@/components/charts/TemperatureChart";
@@ -54,11 +54,16 @@ export default function Historial() {
   useEffect(() => { fetchData(); }, [fetchData]);
 
   async function handleDelete(id: number) {
-    if (confirmDelete !== id) { setConfirmDelete(id); return; }
+    if (confirmDelete !== id) {
+      setConfirmDelete(id);
+      return;
+    }
     setDeleting(id);
     try {
       const res = await fetch(`/api/mediciones?id=${id}`, { method: "DELETE" });
-      if (res.ok) setMediciones((prev) => prev.filter((m) => m.id !== id));
+      if (res.ok) {
+        setMediciones((prev) => prev.filter((m) => m.id !== id));
+      }
     } catch { /* ignore */ }
     setDeleting(null);
     setConfirmDelete(null);
@@ -138,6 +143,7 @@ export default function Historial() {
 
     setSaving(true);
     try {
+      // Upload new photo if selected
       let fotoUrl: string | null | undefined = undefined;
       if (editFoto) {
         setEditFotoUploading(true);
@@ -146,7 +152,11 @@ export default function Historial() {
         } catch (e) {
           setEditFotoUploading(false);
           setSaving(false);
-          alert(e instanceof Error ? `No se pudo subir la foto: ${e.message}` : "No se pudo subir la foto.");
+          alert(
+            e instanceof Error
+              ? `No se pudo subir la foto: ${e.message}`
+              : "No se pudo subir la foto.",
+          );
           return;
         }
         setEditFotoUploading(false);
@@ -162,7 +172,9 @@ export default function Historial() {
           id,
           compostera: editForm.compostera,
           dia: editForm.dia ? parseInt(editForm.dia) : null,
-          temperatura: t, ph: p, humedad: h,
+          temperatura: t,
+          ph: p,
+          humedad: h,
           observaciones: editForm.observaciones || null,
           estado,
           ...(fotoUrl !== undefined ? { foto_url: fotoUrl } : {}),
@@ -210,30 +222,39 @@ export default function Historial() {
     setDownloading(false);
   }
 
-  const totalMediciones = mediciones.length;
-
   return (
-    <div className="min-h-screen">
-      <PageHeader
-        kicker="Bitácora · Sección II"
-        title="Historial."
-        subtitle="Cada entrada del cuaderno de campo, con sus temperaturas, pH y humedad. Filtra por compostera para visualizar la evolución."
-        folio={`${totalMediciones} ENTRADAS · ${filtro ? `COMPOSTERA ${filtro}` : "TODAS"}`}
-        nav={[
-          { href: "/", label: "Índice" },
-          { href: "/historial", label: "Historial", active: true },
-          { href: "/consultas", label: "Consultas" },
-          { href: "/configuracion", label: "Configuración" },
-        ]}
-      />
+    <div className="min-h-screen bg-crema-100">
+      <header className="relative overflow-hidden text-white h-[26vh] min-h-[150px] max-h-[200px]">
+        <NextImage
+          src="/bojay.jpg"
+          alt="Ciénega de San Francisco Bojay"
+          fill
+          priority
+          sizes="(max-width: 480px) 100vw, 480px"
+          className="object-cover"
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-verde-950/70 via-verde-900/55 to-verde-950/85" />
+        <div className="relative z-10 h-full max-w-[480px] mx-auto px-5 py-4 flex flex-col justify-between">
+          <div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-verde-100 drop-shadow-sm">
+              San Francisco Bojay
+            </div>
+            <h1 className="font-display text-[26px] font-black leading-tight tracking-tight mt-0.5 drop-shadow">
+              Historial
+            </h1>
+          </div>
+          <Link href="/" className="flex items-center gap-1.5 text-[13px] font-medium text-verde-100 hover:text-white transition-colors">
+            <IconArrowLeft /> Volver al monitor
+          </Link>
+        </div>
+      </header>
 
-      <main className="max-w-[960px] mx-auto px-5 md:px-8 py-8 md:py-10">
-        {/* Filtros & acciones */}
-        <div className="flex flex-col sm:flex-row gap-2 mb-5">
+      <main className="max-w-[480px] mx-auto px-4 py-5">
+        <div className="flex gap-2 mb-4">
           <select
             value={filtro}
             onChange={(e) => setFiltro(e.target.value)}
-            className="input-field sm:flex-1"
+            className="input-field flex-1"
           >
             <option value="">Todas las composteras</option>
             {Array.from({ length: 10 }, (_, i) => (
@@ -243,29 +264,25 @@ export default function Historial() {
           <button
             onClick={downloadCSV}
             disabled={downloading}
-            className="btn-outline sm:w-auto"
+            className="flex items-center gap-1.5 px-4 py-3 rounded-xl bg-verde-700 text-white text-[13px] font-semibold shadow-card transition-all active:scale-95 disabled:bg-gray-300 disabled:shadow-none"
           >
             <IconDownload />
-            {downloading ? "Descargando…" : "Exportar CSV"}
+            {downloading ? "Descargando..." : "CSV"}
           </button>
         </div>
 
         {canShowChart && (
-          <div className="mb-6">
+          <div className="mb-4">
             <button
               onClick={() => setShowChart((v) => !v)}
-              className="w-full flex items-center justify-between px-4 py-3 rounded-md bg-papel-50 border border-tinta-900/10 text-tinta-800 text-[12px] font-semibold uppercase tracking-kicker hover:border-tinta-600 transition-all"
+              className="w-full px-4 py-2.5 rounded-xl bg-verde-50 text-verde-700 text-[13px] font-semibold hover:bg-verde-100 transition-all active:scale-[0.98]"
             >
-              <span>{showChart ? "Ocultar gráfica de temperatura" : "Mostrar gráfica de temperatura"}</span>
-              <span className="font-mono text-tinta-500">{showChart ? "−" : "+"}</span>
+              {showChart ? "Ocultar gr\u00e1fica" : "Mostrar gr\u00e1fica"}
             </button>
             {showChart && (
-              <div className="mt-3 page-card page-card--flush animate-fade-in">
-                <div className="flex items-baseline justify-between mb-3">
-                  <div className="kicker">Serie temporal</div>
-                  <div className="font-mono text-[11px] text-tinta-500 tabular-nums">
-                    {tempPoints.length} PUNTOS
-                  </div>
+              <div className="mt-3 rounded-2xl p-4 border border-verde-100 bg-white shadow-card animate-fade-in">
+                <div className="text-[13px] font-semibold text-verde-800 mb-2">
+                  Evoluci&oacute;n de temperatura
                 </div>
                 <TemperatureChart puntos={tempPoints} />
               </div>
@@ -274,285 +291,291 @@ export default function Historial() {
         )}
 
         {loading && (
-          <div className="text-center text-tinta-600 py-16 text-[12px] uppercase tracking-kicker font-semibold animate-pulse-fade">
-            Cargando mediciones…
+          <div className="text-center text-verde-600 py-12 text-[14px] animate-pulse-fade">
+            Cargando mediciones...
           </div>
         )}
 
         {error && (
-          <div className="page-card border-arcilla-200 bg-arcilla-50 text-[13px] text-arcilla-700">
+          <div className="page-card border-red-200 bg-red-50 text-[14px] text-red-700">
             {error}
           </div>
         )}
 
         {!loading && !error && mediciones.length === 0 && (
-          <EmptyState
-            kicker="Sin entradas"
-            title="Aún no hay mediciones."
-            body="Cuando guardes una medición desde el índice, aparecerá aquí como una ficha de bitácora."
-          />
+          <div className="text-center text-gray-400 py-12 text-[14px]">
+            No hay mediciones registradas a&uacute;n.
+          </div>
         )}
 
         <div className="flex flex-col gap-3">
-          {mediciones.map((m, idx) => {
+          {mediciones.map((m) => {
             const est = estadoCardConfig[m.estado] || estadoCardConfig.good;
             const fecha = new Date(m.created_at);
             const isOpen = expandido === m.id;
-            const tone = m.estado === "warning" ? "bg-ocre-400" : m.estado === "danger" ? "bg-arcilla-500" : "bg-tinta-500";
             return (
               <div
                 key={m.id}
                 onClick={() => { if (confirmDelete !== m.id && editando !== m.id) setExpandido(isOpen ? null : m.id); }}
-                className={`group relative rounded-md border cursor-pointer transition-all bg-papel-50 hover:border-tinta-600 ${est.border}`}
+                className={`rounded-2xl p-4 border shadow-card cursor-pointer transition-shadow hover:shadow-card-hover ${est.bg} ${est.border}`}
               >
-                {/* Barra lateral de estado */}
-                <div className={`absolute left-0 top-3 bottom-3 w-[3px] rounded-sm ${tone}`} />
-
-                <div className="pl-5 pr-4 py-4">
-                  <div className="flex items-center justify-between mb-2.5">
-                    <div className="flex items-baseline gap-3">
-                      <span className="font-mono text-[10.5px] text-tinta-500 tabular-nums">
-                        N.º {String(totalMediciones - idx).padStart(3, "0")}
-                      </span>
-                      <span className="font-display font-semibold text-[15px] text-tinta-900">
-                        Compostera #{m.compostera}
-                      </span>
-                    </div>
-                    <span className="font-mono text-[10.5px] text-tinta-500 tabular-nums uppercase">
-                      {fecha.toLocaleDateString("es-MX", { day: "2-digit", month: "short" })}
-                      {" · "}
-                      {fecha.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })}
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className={`w-2.5 h-2.5 rounded-full ${est.dot}`} />
+                    <span className="font-semibold text-[14px] text-verde-900">
+                      Compostera #{m.compostera}
                     </span>
                   </div>
-
-                  <div className="grid grid-cols-3 gap-4 mt-3">
-                    <MiniStat label="Temp" value={m.temperatura} unit="°C" />
-                    <MiniStat label="pH" value={m.ph} unit="" />
-                    <MiniStat label="Humedad" value={humedadLabel(m.humedad)} unit="" textual />
+                  <span className="text-[11px] font-medium text-gray-400">
+                    {fecha.toLocaleDateString("es-MX", {
+                      day: "numeric",
+                      month: "short",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  {[
+                    { label: "Temp", value: `${m.temperatura}\u00b0C` },
+                    { label: "pH", value: `${m.ph}` },
+                    { label: "Humedad", value: humedadLabel(m.humedad) },
+                  ].map((d) => (
+                    <div key={d.label} className="bg-white/60 rounded-lg px-2.5 py-2 text-center">
+                      <div className="text-[10px] font-semibold text-verde-700/50 uppercase tracking-wider">{d.label}</div>
+                      <div className="text-[15px] font-semibold text-gray-800 mt-0.5">{d.value}</div>
+                    </div>
+                  ))}
+                </div>
+                {m.foto_url && (
+                  <div className="mt-2.5">
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); fotoModal.open(m.foto_url); }}
+                      className="group relative w-20 h-20 rounded-lg overflow-hidden border border-white/60 shadow-sm active:scale-95 transition-transform"
+                      aria-label="Ver foto en grande"
+                    >
+                      <img
+                        src={m.foto_url}
+                        alt={`Foto compostera #${m.compostera}`}
+                        className="w-full h-full object-cover"
+                      />
+                      <span className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                        <svg className="w-5 h-5 text-white opacity-0 group-hover:opacity-100 drop-shadow transition-opacity" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+                        </svg>
+                      </span>
+                    </button>
                   </div>
-
-                  {m.foto_url && (
-                    <div className="mt-3">
+                )}
+                {(m.dia || m.observaciones) && (
+                  <div className="mt-2.5 pt-2.5 border-t border-black/5 flex flex-col gap-0.5">
+                    {m.dia && (
+                      <div className="text-[12px] font-medium text-verde-700/60">
+                        D&iacute;a {m.dia} del proceso
+                      </div>
+                    )}
+                    {m.observaciones && (
+                      <div className="text-[12px] text-gray-500 italic">{m.observaciones}</div>
+                    )}
+                  </div>
+                )}
+                {isOpen && editando !== m.id && (
+                  <div className="mt-3 pt-3 border-t border-black/5 flex items-center justify-between animate-fade-in">
+                    <div className="flex items-center gap-2">
                       <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); fotoModal.open(m.foto_url); }}
-                        className="group/photo relative w-20 h-20 rounded-sm overflow-hidden border border-tinta-900/20 active:scale-95 transition-transform"
-                        aria-label="Ver foto en grande"
+                        onClick={(e) => { e.stopPropagation(); startEdit(m); }}
+                        className="px-3 py-1.5 rounded-lg text-[12px] font-semibold bg-verde-50 text-verde-700 hover:bg-verde-100 transition-all"
                       >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={m.foto_url} alt={`Foto compostera #${m.compostera}`} className="w-full h-full object-cover" />
-                        <span className="absolute inset-0 bg-tinta-900/0 group-hover/photo:bg-tinta-900/30 transition-colors" />
+                        Editar
                       </button>
-                    </div>
-                  )}
-
-                  {(m.dia || m.observaciones) && (
-                    <div className="mt-3 pt-3 border-t border-tinta-900/8 flex flex-col gap-1">
-                      {m.dia && (
-                        <div className="font-mono text-[11px] text-tinta-600 tabular-nums uppercase tracking-wider">
-                          Día {m.dia} del proceso
-                        </div>
-                      )}
-                      {m.observaciones && (
-                        <div className="text-[12.5px] text-tinta-700 italic font-display">
-                          “{m.observaciones}”
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {isOpen && editando !== m.id && (
-                    <div className="mt-3 pt-3 border-t border-tinta-900/8 flex items-center justify-between animate-fade-in">
-                      <div className="flex items-center gap-2">
+                      {m.foto_url && (
                         <button
-                          onClick={(e) => { e.stopPropagation(); startEdit(m); }}
-                          className="px-3 py-1.5 rounded-sm text-[10.5px] font-semibold uppercase tracking-kicker bg-tinta-50 text-tinta-700 hover:bg-tinta-100 transition-all"
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); fotoModal.open(m.foto_url); }}
+                          className="px-3 py-1.5 rounded-lg text-[12px] font-semibold bg-blue-50 text-blue-600 hover:bg-blue-100 transition-all"
                         >
-                          Editar
+                          Ver foto
                         </button>
-                        {m.foto_url && (
-                          <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); fotoModal.open(m.foto_url); }}
-                            className="px-3 py-1.5 rounded-sm text-[10.5px] font-semibold uppercase tracking-kicker bg-dato-50 text-dato-600 hover:bg-dato-100 transition-all"
-                          >
-                            Ver foto
-                          </button>
-                        )}
-                      </div>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleDelete(m.id); }}
-                        disabled={deleting === m.id}
-                        className={`px-3 py-1.5 rounded-sm text-[10.5px] font-semibold uppercase tracking-kicker transition-all ${
-                          confirmDelete === m.id
-                            ? "bg-arcilla-500 text-papel-50"
-                            : "bg-arcilla-50 text-arcilla-600 hover:bg-arcilla-100"
-                        } disabled:opacity-50`}
-                      >
-                        {deleting === m.id ? "Borrando…" : confirmDelete === m.id ? "Confirmar" : "Borrar"}
-                      </button>
+                      )}
                     </div>
-                  )}
-
-                  {editando === m.id && (
-                    <div className="mt-3 pt-3 border-t border-tinta-900/8 animate-fade-in" onClick={(e) => e.stopPropagation()}>
-                      <div className="kicker mb-3">Editar entrada</div>
-                      <div className="grid grid-cols-2 gap-2 mb-2">
-                        <div>
-                          <label className="input-label">Compostera</label>
-                          <select
-                            value={editForm.compostera}
-                            onChange={(e) => setEditForm({ ...editForm, compostera: parseInt(e.target.value) })}
-                            className="input-field text-[13px] py-2"
-                          >
-                            {Array.from({ length: 10 }, (_, i) => (
-                              <option key={i + 1} value={i + 1}>#{i + 1}</option>
-                            ))}
-                          </select>
-                        </div>
-                        <div>
-                          <label className="input-label">Día</label>
-                          <input
-                            type="number"
-                            value={editForm.dia}
-                            onChange={(e) => setEditForm({ ...editForm, dia: e.target.value })}
-                            placeholder="—"
-                            className="input-field text-[13px] py-2 font-mono"
-                          />
-                        </div>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleDelete(m.id); }}
+                      disabled={deleting === m.id}
+                      className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all ${
+                        confirmDelete === m.id
+                          ? "bg-red-500 text-white"
+                          : "bg-red-50 text-red-600 hover:bg-red-100"
+                      } disabled:opacity-50`}
+                    >
+                      {deleting === m.id ? "Borrando..." : confirmDelete === m.id ? "Confirmar borrar" : "Borrar registro"}
+                    </button>
+                  </div>
+                )}
+                {editando === m.id && (
+                  <div className="mt-3 pt-3 border-t border-black/5 animate-fade-in" onClick={(e) => e.stopPropagation()}>
+                    <div className="text-[12px] font-semibold text-verde-700 uppercase tracking-wider mb-3">
+                      Editar registro
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 mb-2">
+                      <div>
+                        <label className="text-[10px] font-semibold text-gray-500 uppercase">Compostera</label>
+                        <select
+                          value={editForm.compostera}
+                          onChange={(e) => setEditForm({ ...editForm, compostera: parseInt(e.target.value) })}
+                          className="input-field text-[13px] py-2"
+                        >
+                          {Array.from({ length: 10 }, (_, i) => (
+                            <option key={i + 1} value={i + 1}>#{i + 1}</option>
+                          ))}
+                        </select>
                       </div>
-                      <div className="grid grid-cols-3 gap-2 mb-2">
-                        <div>
-                          <label className="input-label">Temp °C</label>
-                          <input
-                            type="number" step="0.1"
-                            value={editForm.temperatura}
-                            onChange={(e) => setEditForm({ ...editForm, temperatura: e.target.value })}
-                            className="input-field text-[13px] py-2 text-center font-mono"
-                          />
-                        </div>
-                        <div>
-                          <label className="input-label">pH</label>
-                          <input
-                            type="number" step="0.1"
-                            value={editForm.ph}
-                            onChange={(e) => setEditForm({ ...editForm, ph: e.target.value })}
-                            className="input-field text-[13px] py-2 text-center font-mono"
-                          />
-                        </div>
-                        <div>
-                          <label className="input-label">Humedad %</label>
-                          <input
-                            type="number" step="1"
-                            value={editForm.humedad}
-                            onChange={(e) => setEditForm({ ...editForm, humedad: e.target.value })}
-                            className="input-field text-[13px] py-2 text-center font-mono"
-                          />
-                        </div>
-                      </div>
-                      <div className="mb-3">
-                        <label className="input-label">Observaciones</label>
+                      <div>
+                        <label className="text-[10px] font-semibold text-gray-500 uppercase">D&iacute;a</label>
                         <input
-                          type="text"
-                          value={editForm.observaciones}
-                          onChange={(e) => setEditForm({ ...editForm, observaciones: e.target.value })}
-                          placeholder="Opcional"
+                          type="number"
+                          value={editForm.dia}
+                          onChange={(e) => setEditForm({ ...editForm, dia: e.target.value })}
+                          placeholder="—"
                           className="input-field text-[13px] py-2"
                         />
                       </div>
-                      <div className="mb-3">
-                        <label className="input-label">Foto</label>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 mb-2">
+                      <div>
+                        <label className="text-[10px] font-semibold text-gray-500 uppercase">Temp &deg;C</label>
                         <input
-                          ref={editFotoInput}
-                          type="file"
-                          accept="image/*"
-                          capture="environment"
-                          onChange={handleEditFoto}
-                          className="hidden"
+                          type="number"
+                          step="0.1"
+                          value={editForm.temperatura}
+                          onChange={(e) => setEditForm({ ...editForm, temperatura: e.target.value })}
+                          className="input-field text-[13px] py-2 text-center"
                         />
-                        {editFotoPreview ? (
-                          <div className="relative mt-1 rounded-sm overflow-hidden">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={editFotoPreview} alt="Preview" className="w-full h-32 object-cover" />
-                            <button
-                              onClick={clearEditFoto}
-                              className="absolute top-1.5 right-1.5 w-6 h-6 bg-tinta-900/80 text-papel-50 rounded-full text-[14px] flex items-center justify-center"
-                            >
-                              ×
-                            </button>
-                            {editFotoUploading && (
-                              <div className="absolute bottom-2 left-2 bg-papel-50/90 rounded-sm px-3 py-1">
-                                <span className="text-[10px] font-semibold uppercase tracking-kicker text-tinta-700 animate-pulse-fade">Subiendo…</span>
-                              </div>
-                            )}
-                          </div>
-                        ) : !editFotoRemoved && editFotoExisting ? (
-                          <div className="relative mt-1 rounded-sm overflow-hidden">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={editFotoExisting} alt="Foto actual" className="w-full h-32 object-cover" />
-                            <div className="absolute top-1.5 right-1.5 flex gap-1">
-                              <button
-                                onClick={() => editFotoInput.current?.click()}
-                                className="w-6 h-6 bg-tinta-900/80 text-papel-50 rounded-full text-[11px] flex items-center justify-center"
-                                title="Cambiar foto"
-                              >
-                                <IconCamera className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={clearEditFoto}
-                                className="w-6 h-6 bg-tinta-900/80 text-papel-50 rounded-full text-[14px] flex items-center justify-center"
-                                title="Quitar foto"
-                              >
-                                ×
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => editFotoInput.current?.click()}
-                            className="mt-1 w-full flex items-center justify-center gap-2 py-3 rounded-sm border border-dashed border-tinta-300 text-tinta-600 text-[11px] font-semibold uppercase tracking-kicker hover:border-tinta-600 hover:text-tinta-900 transition-colors"
-                          >
-                            <IconCamera className="w-4 h-4" />
-                            {editFotoRemoved ? "Agregar foto" : "Tomar o cargar foto"}
-                          </button>
-                        )}
                       </div>
-                      {(editFoto || (!editFotoRemoved && editFotoExisting)) && (
-                        <div className="mb-3">
-                          <button
-                            type="button"
-                            onClick={handleEditAnalizar}
-                            disabled={editAnalysis.analyzing}
-                            className="w-full px-4 py-2 rounded-sm bg-tinta-800 text-papel-50 text-[10.5px] font-semibold uppercase tracking-kicker transition-all active:scale-[0.99] disabled:bg-tinta-200 disabled:text-tinta-400"
-                          >
-                            {editAnalysis.analyzing ? "Analizando…" : "Analizar imagen"}
-                          </button>
-                          {editAnalysis.error && (
-                            <div className="mt-2 px-3 py-1.5 rounded-sm text-[10.5px] font-semibold text-arcilla-700 bg-arcilla-50 ring-1 ring-arcilla-200">
-                              {editAnalysis.error}
-                            </div>
-                          )}
-                          <AnalisisBadge estado={editAnalysis.data?.estado} accion={editAnalysis.data?.accion} compact />
-                        </div>
-                      )}
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => handleSaveEdit(m.id)}
-                          disabled={saving || !editForm.temperatura || !editForm.ph || !editForm.humedad}
-                          className="flex-1 py-2.5 rounded-sm text-[10.5px] font-semibold uppercase tracking-kicker bg-tinta-800 text-papel-50 transition-all active:scale-[0.99] disabled:bg-tinta-200 disabled:text-tinta-400"
-                        >
-                          {saving ? "Guardando…" : "Guardar cambios"}
-                        </button>
-                        <button
-                          onClick={cancelEdit}
-                          className="px-4 py-2.5 rounded-sm text-[10.5px] font-semibold uppercase tracking-kicker bg-papel-200 text-tinta-700 hover:bg-papel-300 transition-all"
-                        >
-                          Cancelar
-                        </button>
+                      <div>
+                        <label className="text-[10px] font-semibold text-gray-500 uppercase">pH</label>
+                        <input
+                          type="number"
+                          step="0.1"
+                          value={editForm.ph}
+                          onChange={(e) => setEditForm({ ...editForm, ph: e.target.value })}
+                          className="input-field text-[13px] py-2 text-center"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-semibold text-gray-500 uppercase">Humedad %</label>
+                        <input
+                          type="number"
+                          step="1"
+                          value={editForm.humedad}
+                          onChange={(e) => setEditForm({ ...editForm, humedad: e.target.value })}
+                          className="input-field text-[13px] py-2 text-center"
+                        />
                       </div>
                     </div>
-                  )}
-                </div>
+                    <div className="mb-3">
+                      <label className="text-[10px] font-semibold text-gray-500 uppercase">Observaciones</label>
+                      <input
+                        type="text"
+                        value={editForm.observaciones}
+                        onChange={(e) => setEditForm({ ...editForm, observaciones: e.target.value })}
+                        placeholder="Opcional"
+                        className="input-field text-[13px] py-2"
+                      />
+                    </div>
+                    <div className="mb-3">
+                      <label className="text-[10px] font-semibold text-gray-500 uppercase">Foto</label>
+                      <input
+                        ref={editFotoInput}
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        onChange={handleEditFoto}
+                        className="hidden"
+                      />
+                      {editFotoPreview ? (
+                        <div className="relative mt-1">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={editFotoPreview} alt="Preview" className="w-full h-32 object-cover rounded-xl" />
+                          <button
+                            onClick={clearEditFoto}
+                            className="absolute top-1.5 right-1.5 w-6 h-6 bg-black/50 text-white rounded-full text-[14px] flex items-center justify-center"
+                          >
+                            &times;
+                          </button>
+                          {editFotoUploading && (
+                            <div className="absolute bottom-2 left-2 bg-white/90 rounded-full px-3 py-1">
+                              <span className="text-[11px] font-semibold text-verde-700 animate-pulse-fade">Subiendo foto...</span>
+                            </div>
+                          )}
+                        </div>
+                      ) : !editFotoRemoved && editFotoExisting ? (
+                        <div className="relative mt-1">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={editFotoExisting} alt="Foto actual" className="w-full h-32 object-cover rounded-xl" />
+                          <div className="absolute top-1.5 right-1.5 flex gap-1">
+                            <button
+                              onClick={() => editFotoInput.current?.click()}
+                              className="w-6 h-6 bg-black/50 text-white rounded-full text-[11px] flex items-center justify-center"
+                              title="Cambiar foto"
+                            >
+                              <IconCamera className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={clearEditFoto}
+                              className="w-6 h-6 bg-black/50 text-white rounded-full text-[14px] flex items-center justify-center"
+                              title="Quitar foto"
+                            >
+                              &times;
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => editFotoInput.current?.click()}
+                          className="mt-1 w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed border-verde-200 text-verde-600 text-[12px] font-medium hover:bg-verde-50/50 transition-colors"
+                        >
+                          <IconCamera className="w-4 h-4" />
+                          {editFotoRemoved ? "Agregar foto" : "Tomar o cargar foto"}
+                        </button>
+                      )}
+                    </div>
+                    {(editFoto || (!editFotoRemoved && editFotoExisting)) && (
+                      <div className="mb-3">
+                        <button
+                          type="button"
+                          onClick={handleEditAnalizar}
+                          disabled={editAnalysis.analyzing}
+                          className="w-full px-4 py-2 rounded-lg bg-verde-700 text-white text-[12px] font-semibold transition-all active:scale-[0.98] disabled:bg-gray-300"
+                        >
+                          {editAnalysis.analyzing ? "Analizando..." : "Analizar imagen"}
+                        </button>
+                        {editAnalysis.error && (
+                          <div className="mt-2 px-3 py-1.5 rounded-lg text-[11px] font-semibold text-red-700 bg-red-50 ring-1 ring-red-200">
+                            {editAnalysis.error}
+                          </div>
+                        )}
+                        <AnalisisBadge estado={editAnalysis.data?.estado} accion={editAnalysis.data?.accion} compact />
+                      </div>
+                    )}
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleSaveEdit(m.id)}
+                        disabled={saving || !editForm.temperatura || !editForm.ph || !editForm.humedad}
+                        className="flex-1 py-2 rounded-lg text-[12px] font-semibold bg-verde-700 text-white transition-all active:scale-[0.98] disabled:bg-gray-300"
+                      >
+                        {saving ? "Guardando..." : "Guardar cambios"}
+                      </button>
+                      <button
+                        onClick={cancelEdit}
+                        className="px-4 py-2 rounded-lg text-[12px] font-semibold bg-gray-100 text-gray-600 hover:bg-gray-200 transition-all"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })}
@@ -560,35 +583,6 @@ export default function Historial() {
       </main>
 
       <FotoModal url={fotoModal.url} onClose={fotoModal.close} showOpenOriginal />
-    </div>
-  );
-}
-
-function MiniStat({ label, value, unit, textual = false }: { label: string; value: string | number; unit?: string; textual?: boolean }) {
-  return (
-    <div className="flex flex-col">
-      <span className="text-[9.5px] font-semibold uppercase tracking-kicker text-tinta-500 mb-0.5">{label}</span>
-      <span className="flex items-baseline gap-1">
-        <span className={`${textual ? "font-display text-[14px] font-semibold" : "font-mono text-[17px] font-semibold tabular-nums"} text-tinta-900 leading-none`}>
-          {value}
-        </span>
-        {unit && <span className="font-mono text-[10px] text-tinta-500">{unit}</span>}
-      </span>
-    </div>
-  );
-}
-
-function EmptyState({ kicker, title, body }: { kicker: string; title: string; body: string }) {
-  return (
-    <div className="text-center py-16 px-6 border border-dashed border-tinta-900/15 rounded-md bg-papel-50/30">
-      <div className="kicker justify-center mb-3">{kicker}</div>
-      <div className="font-display text-[24px] font-black text-tinta-900 leading-tight mb-2">
-        {title}
-      </div>
-      <p className="text-[13px] text-tinta-600 max-w-[36ch] mx-auto leading-relaxed">
-        {body}
-      </p>
-      <Link href="/" className="btn-outline inline-flex mt-5">Ir al índice</Link>
     </div>
   );
 }

@@ -247,14 +247,16 @@ export default function Home() {
                 Sistema de monitoreo y diagnóstico de compostaje de lirio acuático
               </p>
             </div>
-            <NextImage
-              src="/Logo_UAM.png"
-              alt="Universidad Autónoma Metropolitana"
-              width={120}
-              height={60}
-              priority
-              className="flex-shrink-0 w-[60px] h-auto opacity-85 brightness-0 invert drop-shadow"
-            />
+            <div className="flex-shrink-0 bg-white/90 rounded-md px-2 py-1.5 shadow-card">
+              <NextImage
+                src="/Logo_UAM.png"
+                alt="Universidad Autónoma Metropolitana"
+                width={120}
+                height={60}
+                priority
+                className="w-[56px] h-auto"
+              />
+            </div>
           </div>
 
           <nav className="flex items-center gap-4 text-[13px] font-medium text-verde-100">

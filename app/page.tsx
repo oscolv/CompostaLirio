@@ -235,16 +235,26 @@ export default function Home() {
         <div className="absolute inset-0 bg-gradient-to-b from-verde-950/70 via-verde-900/55 to-verde-950/85" />
 
         <div className="relative z-10 h-full max-w-[480px] mx-auto px-5 py-4 flex flex-col justify-between">
-          <div>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-verde-100 drop-shadow-sm">
-              San Francisco Bojay
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-verde-100 drop-shadow-sm">
+                San Francisco Bojay
+              </div>
+              <h1 className="font-display text-[26px] font-black leading-tight tracking-tight mt-0.5 drop-shadow">
+                Agente de Composta
+              </h1>
+              <p className="text-[12px] leading-snug text-verde-50/90 mt-1 max-w-[280px] drop-shadow-sm">
+                Sistema de monitoreo y diagnóstico de compostaje de lirio acuático
+              </p>
             </div>
-            <h1 className="font-display text-[26px] font-black leading-tight tracking-tight mt-0.5 drop-shadow">
-              Agente de Composta
-            </h1>
-            <p className="text-[12px] leading-snug text-verde-50/90 mt-1 max-w-[320px] drop-shadow-sm">
-              Sistema de monitoreo y diagnóstico de compostaje de lirio acuático
-            </p>
+            <NextImage
+              src="/Logo_UAM.png"
+              alt="Universidad Autónoma Metropolitana"
+              width={120}
+              height={60}
+              priority
+              className="flex-shrink-0 w-[60px] h-auto opacity-85 brightness-0 invert drop-shadow"
+            />
           </div>
 
           <nav className="flex items-center gap-4 text-[13px] font-medium text-verde-100">

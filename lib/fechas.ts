@@ -6,6 +6,18 @@ export function hoyISO(): string {
   return `${y}-${m}-${day}`;
 }
 
+export function horaActual(): string {
+  const d = new Date();
+  const h = String(d.getHours()).padStart(2, "0");
+  const m = String(d.getMinutes()).padStart(2, "0");
+  return `${h}:${m}`;
+}
+
+export function combinarFechaHora(fecha: string, hora: string): string {
+  // Interpreta fecha+hora como hora local y devuelve ISO en UTC.
+  return new Date(`${fecha}T${hora}:00`).toISOString();
+}
+
 export function diasDesde(fecha: string, hasta?: string): number {
   const inicio = new Date(fecha + "T00:00:00");
   const fin = hasta ? new Date(hasta + "T00:00:00") : new Date();

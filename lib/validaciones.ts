@@ -63,7 +63,15 @@ export function validarMedicionInput(body: unknown): ValidacionResultado {
     fotoUrlRaw === undefined ? undefined : fotoUrlRaw === null ? null : typeof fotoUrlRaw === "string" ? fotoUrlRaw : null;
 
   const fechaRaw = b.fecha;
-  const fecha = typeof fechaRaw === "string" && /^\d{4}-\d{2}-\d{2}$/.test(fechaRaw) ? fechaRaw : null;
+  let fecha: string | null = null;
+  if (typeof fechaRaw === "string" && fechaRaw !== "") {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(fechaRaw)) {
+      fecha = fechaRaw;
+    } else {
+      const d = new Date(fechaRaw);
+      if (!isNaN(d.getTime())) fecha = d.toISOString();
+    }
+  }
 
   return {
     ok: true,

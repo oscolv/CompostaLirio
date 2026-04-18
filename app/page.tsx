@@ -5,7 +5,7 @@ import Link from "next/link";
 import NextImage from "next/image";
 import Markdown from "react-markdown";
 import { getStatus } from "@/lib/estado";
-import { hoyISO, diasDesde } from "@/lib/fechas";
+import { hoyISO, horaActual, combinarFechaHora, diasDesde } from "@/lib/fechas";
 import { HUMEDAD_NIVELES } from "@/lib/humedad";
 import type { ComposteraInfo, Message } from "@/lib/types";
 import {
@@ -47,6 +47,7 @@ export default function Home() {
   const [diagLoading, setDiagLoading] = useState(false);
   const [diagError, setDiagError] = useState("");
   const [fechaRegistro, setFechaRegistro] = useState(hoyISO());
+  const [horaRegistro, setHoraRegistro] = useState(horaActual());
   const chatEnd = useRef<HTMLDivElement>(null);
 
   useEffect(() => { chatEnd.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, loading]);
@@ -76,7 +77,7 @@ export default function Home() {
           compostera: parseInt(compostera), dia: diaActual,
           temperatura: parseFloat(temp), ph: parseFloat(ph), humedad: parseFloat(hum),
           observaciones: obs || null, estado, foto_url: fotoUrl,
-          fecha: fechaRegistro !== hoyISO() ? fechaRegistro : null,
+          fecha: combinarFechaHora(fechaRegistro, horaRegistro),
         }),
       });
       setSaveStatus(res.ok ? "ok" : "error");
@@ -210,6 +211,7 @@ export default function Home() {
     clearFoto();
     setDatosGuardados(false);
     setFechaRegistro(hoyISO());
+    setHoraRegistro(horaActual());
   }
 
   const canSubmit = temp !== "" && ph !== "" && hum !== "";
@@ -372,14 +374,27 @@ export default function Home() {
               </div>
 
               <div className="mb-4">
-                <label className="input-label">Fecha del registro</label>
-                <input
-                  type="date"
-                  value={fechaRegistro}
-                  max={hoyISO()}
-                  onChange={(e) => setFechaRegistro(e.target.value || hoyISO())}
-                  className="input-field"
-                />
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="input-label">Fecha del registro</label>
+                    <input
+                      type="date"
+                      value={fechaRegistro}
+                      max={hoyISO()}
+                      onChange={(e) => setFechaRegistro(e.target.value || hoyISO())}
+                      className="input-field"
+                    />
+                  </div>
+                  <div>
+                    <label className="input-label">Hora</label>
+                    <input
+                      type="time"
+                      value={horaRegistro}
+                      onChange={(e) => setHoraRegistro(e.target.value || horaActual())}
+                      className="input-field"
+                    />
+                  </div>
+                </div>
                 {fechaRegistro !== hoyISO() && (
                   <div className="text-[11px] text-tierra-600 font-medium mt-1.5">
                     Registro con fecha atrasada

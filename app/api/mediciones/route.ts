@@ -104,6 +104,7 @@ export async function PUT(req: NextRequest) {
       observaciones: d.observaciones,
       estado: d.estado,
       ...(fotoUrlProvisto ? { foto_url: d.foto_url ?? null } : {}),
+      ...(d.fecha ? { created_at: d.fecha } : {}),
     });
     if (!result) {
       return NextResponse.json({ error: "Medición no encontrada" }, { status: 404 });

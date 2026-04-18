@@ -246,9 +246,12 @@ export async function updateMedicion(id: number, data: {
   observaciones: string | null;
   estado: string;
   foto_url?: string | null;
+  created_at?: string | null;
 }) {
   const sql = getSQL();
-  if (data.foto_url !== undefined) {
+  const setFoto = data.foto_url !== undefined;
+  const setCreated = !!data.created_at;
+  if (setFoto && setCreated) {
     await sql`
       UPDATE mediciones SET
         compostera = ${data.compostera},
@@ -258,7 +261,34 @@ export async function updateMedicion(id: number, data: {
         humedad = ${data.humedad},
         observaciones = ${data.observaciones},
         estado = ${data.estado},
-        foto_url = ${data.foto_url}
+        foto_url = ${data.foto_url ?? null},
+        created_at = ${data.created_at}
+      WHERE id = ${id}
+    `;
+  } else if (setFoto) {
+    await sql`
+      UPDATE mediciones SET
+        compostera = ${data.compostera},
+        dia = ${data.dia},
+        temperatura = ${data.temperatura},
+        ph = ${data.ph},
+        humedad = ${data.humedad},
+        observaciones = ${data.observaciones},
+        estado = ${data.estado},
+        foto_url = ${data.foto_url ?? null}
+      WHERE id = ${id}
+    `;
+  } else if (setCreated) {
+    await sql`
+      UPDATE mediciones SET
+        compostera = ${data.compostera},
+        dia = ${data.dia},
+        temperatura = ${data.temperatura},
+        ph = ${data.ph},
+        humedad = ${data.humedad},
+        observaciones = ${data.observaciones},
+        estado = ${data.estado},
+        created_at = ${data.created_at}
       WHERE id = ${id}
     `;
   } else {

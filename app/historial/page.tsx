@@ -7,6 +7,7 @@ import type { Medicion } from "@/lib/types";
 import { estadoCardConfig, getEstadoSimple } from "@/lib/estado";
 import { humedadLabel } from "@/lib/humedad";
 import { uploadFoto } from "@/lib/foto";
+import { combinarFechaHora, fechaLocalDeISO, horaLocalDeISO } from "@/lib/fechas";
 import { IconArrowLeft, IconDownload, IconCamera } from "@/components/ui/icons";
 import { FotoModal } from "@/components/ui/FotoModal";
 import { AnalisisBadge } from "@/components/ui/AnalisisBadge";
@@ -24,8 +25,8 @@ export default function Historial() {
   const [deleting, setDeleting] = useState<number | null>(null);
   const [editando, setEditando] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<{
-    compostera: number; dia: string; temperatura: string; ph: string; humedad: string; observaciones: string;
-  }>({ compostera: 1, dia: "", temperatura: "", ph: "", humedad: "", observaciones: "" });
+    compostera: number; dia: string; temperatura: string; ph: string; humedad: string; observaciones: string; fecha: string; hora: string;
+  }>({ compostera: 1, dia: "", temperatura: "", ph: "", humedad: "", observaciones: "", fecha: "", hora: "" });
   const [saving, setSaving] = useState(false);
   const [editFoto, setEditFoto] = useState<File | null>(null);
   const [editFotoPreview, setEditFotoPreview] = useState("");
@@ -78,6 +79,8 @@ export default function Historial() {
       ph: m.ph.toString(),
       humedad: m.humedad.toString(),
       observaciones: m.observaciones ?? "",
+      fecha: fechaLocalDeISO(m.created_at),
+      hora: horaLocalDeISO(m.created_at),
     });
     setEditFoto(null);
     setEditFotoPreview("");
@@ -178,6 +181,9 @@ export default function Historial() {
           observaciones: editForm.observaciones || null,
           estado,
           ...(fotoUrl !== undefined ? { foto_url: fotoUrl } : {}),
+          ...(editForm.fecha && editForm.hora
+            ? { fecha: combinarFechaHora(editForm.fecha, editForm.hora) }
+            : {}),
         }),
       });
       if (res.ok) {
@@ -438,6 +444,26 @@ export default function Historial() {
                           value={editForm.dia}
                           onChange={(e) => setEditForm({ ...editForm, dia: e.target.value })}
                           placeholder="—"
+                          className="input-field text-[13px] py-2"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 mb-2">
+                      <div>
+                        <label className="text-[10px] font-semibold text-gray-500 uppercase">Fecha</label>
+                        <input
+                          type="date"
+                          value={editForm.fecha}
+                          onChange={(e) => setEditForm({ ...editForm, fecha: e.target.value })}
+                          className="input-field text-[13px] py-2"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-semibold text-gray-500 uppercase">Hora</label>
+                        <input
+                          type="time"
+                          value={editForm.hora}
+                          onChange={(e) => setEditForm({ ...editForm, hora: e.target.value })}
                           className="input-field text-[13px] py-2"
                         />
                       </div>

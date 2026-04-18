@@ -18,6 +18,21 @@ export function combinarFechaHora(fecha: string, hora: string): string {
   return new Date(`${fecha}T${hora}:00`).toISOString();
 }
 
+export function fechaLocalDeISO(iso: string): string {
+  const d = new Date(iso);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+export function horaLocalDeISO(iso: string): string {
+  const d = new Date(iso);
+  const h = String(d.getHours()).padStart(2, "0");
+  const m = String(d.getMinutes()).padStart(2, "0");
+  return `${h}:${m}`;
+}
+
 export function diasDesde(fecha: string, hasta?: string): number {
   const inicio = new Date(fecha + "T00:00:00");
   const fin = hasta ? new Date(hasta + "T00:00:00") : new Date();

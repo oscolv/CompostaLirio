@@ -60,6 +60,18 @@ export default function Home() {
     analysis.reset();
   }
 
+  function handleComposteraChange(nuevaId: string) {
+    setCompostera(nuevaId);
+    setTemp("");
+    setPh("");
+    setHum("");
+    setObs("");
+    clearFoto();
+    setValidationError("");
+    setSaveStatus("");
+    setDatosGuardados(false);
+  }
+
   async function handleAnalizar() {
     if (!photo.foto) return;
     const data = await analysis.analizar(photo.foto);
@@ -361,7 +373,7 @@ export default function Home() {
 
               <div className="mb-4">
                 <label className="input-label">Compostera</label>
-                <select value={compostera} onChange={(e) => setCompostera(e.target.value)} className="input-field">
+                <select value={compostera} onChange={(e) => handleComposteraChange(e.target.value)} className="input-field">
                   {(activeComposteras.length > 0
                     ? activeComposteras
                     : Array.from({ length: 10 }, (_, i) => ({ id: i + 1, nombre: null } as ComposteraInfo))

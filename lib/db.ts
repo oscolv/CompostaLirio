@@ -6,12 +6,16 @@ function getSQL() {
   return neon(url);
 }
 
+// LEGACY COMPAT: ensureTable crea el esquema v1 (pre-jerarquía).
+// Se conserva porque ensureSchemaV2 lo invoca primero y el backfill
+// de ciclos depende de mediciones.compostera. Retirar solo cuando
+// mediciones.compostera deje de existir.
 export async function ensureTable() {
   const sql = getSQL();
   await sql`
     CREATE TABLE IF NOT EXISTS mediciones (
       id SERIAL PRIMARY KEY,
-      compostera INTEGER NOT NULL,
+      compostera INTEGER NOT NULL,  -- LEGACY COMPAT: futura migración a drop (ver ciclo_id)
       dia INTEGER,
       temperatura REAL NOT NULL,
       ph REAL NOT NULL,
@@ -310,6 +314,9 @@ export async function insertMedicion(data: {
   return result[0];
 }
 
+// LEGACY COMPAT: filtro por compostera cruda. Para el nuevo modelo usar
+// getMedicionesByCiclo. Se conserva como fallback histórico y para el
+// GET /api/mediciones?compostera= mientras haya composteras sin ciclo.
 export async function getMediciones(compostera?: number) {
   const sql = getSQL();
   if (compostera) {
@@ -323,6 +330,7 @@ export async function getMediciones(compostera?: number) {
   return sql`SELECT * FROM mediciones ORDER BY created_at DESC LIMIT 100`;
 }
 
+// LEGACY COMPAT: usar getMedicionesExportByCiclo en flujos nuevos.
 export async function getMedicionesExport(compostera?: number) {
   const sql = getSQL();
   if (compostera) {
@@ -346,6 +354,8 @@ export async function getComposteraById(id: number) {
   return rows[0] || null;
 }
 
+// LEGACY COMPAT: no persiste ciclo_id. Toda ruta nueva debe usar
+// insertConsultaConCiclo. Se conserva solo para callers previos.
 export async function insertConsulta(data: {
   tipo: string;
   compostera: number | null;

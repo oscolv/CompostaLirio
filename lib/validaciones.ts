@@ -38,6 +38,10 @@ export function validarMedicionInput(body: unknown): ValidacionResultado<Medicio
   }
   const b = body as Record<string, unknown>;
 
+  // LEGACY COMPAT: compostera sigue siendo obligatoria porque
+  // mediciones.compostera es NOT NULL en BD y el resolverCiclo acepta
+  // inferir ciclo desde ella. Cuando se promueva ciclo_id a NOT NULL
+  // y se elimine mediciones.compostera, este campo pasa a opcional.
   const compostera = entero(b.compostera);
   if (compostera === null || compostera < 1) {
     return { ok: false, error: "Compostera inválida" };

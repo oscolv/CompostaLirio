@@ -188,10 +188,13 @@ function resumenEstadistico(rows: MedicionRow[]): string {
 }
 
 // =====================================================================
-// Resumen por compostera (legacy): agrupa TODAS las mediciones de la
-// compostera sin distinguir ciclos. Se conserva por compatibilidad con
-// flujos antiguos. Internamente delega al ciclo activo si existe para
-// ofrecer contexto de ciclo a la IA cuando sea posible.
+// LEGACY COMPAT: Resumen por compostera. Agrupa TODAS las mediciones
+// de la compostera sin distinguir ciclos. En producción ya no se
+// activa este camino porque toda compostera con datos tiene un ciclo
+// tras la migración v2; internamente delega a buildResumenHistoricoPorCiclo
+// si encuentra ciclo activo. Solo se ejecuta el fallback total en
+// composteras huérfanas (caso pre-migración). Retirar cuando /api/chat
+// y /api/diagnostico dejen de aceptar compostera sin ciclo.
 // =====================================================================
 export async function buildResumenHistorico(compostera: number): Promise<string | null> {
   // Si la compostera tiene un ciclo activo, el diagnóstico por ciclo es

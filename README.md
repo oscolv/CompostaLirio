@@ -20,10 +20,13 @@ con un agente conversacional.
 
 ```
 app/
+  layout.tsx               Envuelve el árbol con <Providers> (SitioProvider)
+  providers.tsx            Monta el contexto global de sitio
   page.tsx                 Captura de medición + chat + diagnóstico
   historial/page.tsx       Listado, edición y CSV (filtros sitio/compostera/ciclo)
   consultas/page.tsx       Historial de preguntas
   configuracion/           Composteras, sitios, ciclos, formulaciones
+    page.tsx               Panel del sitio activo: crear/borrar/editar composteras
     sitios/                CRUD de sitios
     composteras/[id]/      Detalle y formulaciones (legacy) de una compostera
     composteras/[id]/ciclos/  Listado e inicio de ciclos de la compostera
@@ -31,11 +34,13 @@ app/
   login/                   Pantalla de PIN
   api/
     mediciones/            CRUD (+ export CSV, filtros ciclo/compostera/sitio)
-    composteras/           Bulk upsert de composteras
+    composteras/           Bulk upsert del panel
+    composteras/[id]/      DELETE (si no hay historia) y PATCH estado
     composteras/[id]/ciclos  Ciclos de una compostera
     ciclos/[id]/           Detalle, edición, cerrar, descartar
+    ciclos/[id]/mediciones  Listado y export CSV por ciclo
     sitios/                CRUD de sitios
-    sitios/[id]/composteras  Composteras de un sitio
+    sitios/[id]/composteras  Listar (opcional ?counts=1) y crear compostera
     formulaciones/         CRUD de formulaciones
     consultas/             Log de preguntas
     analizar/              Análisis de foto (IA de visión)
@@ -47,6 +52,8 @@ app/
 lib/
   db.ts                    Acceso a Neon (SQL, ensureSchemaV2 + legacy ensureTable)
   ciclos.ts                Helper central resolverCiclo (coherencia ciclo↔compostera)
+  sitio-context.tsx        SitioProvider/useSitio — selector de sitio compartido,
+                           persistido en localStorage (composta.sitio_id)
   analisis.ts              Tipos, parse y reglas del análisis visual
   analizar.ts              Cliente: fetch a /api/analizar
   openai-vision.ts         Helper fino de la API de visión de OpenAI
@@ -55,7 +62,7 @@ lib/
   fechas.ts                hoyISO, diasDesde
   foto.ts                  compressImage, uploadFoto (cliente)
   types.ts                 Tipos compartidos de dominio (Sitio, Ciclo, Medicion…)
-  validaciones.ts          Validación de body (medicion, ciclo, sitio)
+  validaciones.ts          Validación de body (medicion, ciclo, sitio, compostera)
   prompt.ts                Prompt de chat/diagnóstico
   diagnostico.ts           buildResumenHistoricoPorCiclo (v2) + legacy por compostera
   patrones.ts              Reglas/patrones del diagnóstico
@@ -75,6 +82,7 @@ hooks/
 
 scripts/
   migrations/              SQL idempotente aplicado manualmente a Neon
+                           + plan de Fase 3 (endurecimiento BD, retiro legacy)
 
 middleware.ts              Gate por PIN con cookie access_pin
 ```
@@ -97,10 +105,15 @@ middleware.ts              Gate por PIN con cookie access_pin
 |---|---|---|
 | `GET/POST` | `/api/sitios` | Listar / crear sitios |
 | `GET/PUT/DELETE` | `/api/sitios/[id]` | Detalle / actualizar / desactivar (soft) |
-| `GET` | `/api/sitios/[id]/composteras` | Composteras de un sitio |
-| `GET/POST` | `/api/composteras` | Bulk upsert del panel de 10 composteras |
+| `GET` | `/api/sitios/[id]/composteras` | Composteras de un sitio (opcional `?counts=1` con ciclos/mediciones) |
+| `POST` | `/api/sitios/[id]/composteras` | Crear una compostera dentro del sitio |
+| `GET/POST` | `/api/composteras` | Bulk upsert del panel |
+| `PATCH` | `/api/composteras/[id]` | Cambiar `estado` (activa\|inactiva\|retirada) |
+| `DELETE` | `/api/composteras/[id]` | Borrar compostera (409 si ya tiene ciclos; solo se puede retirar) |
 | `GET/POST` | `/api/composteras/[id]/ciclos` | Listar historial / crear ciclo (409 si ya hay uno activo) |
 | `GET/PUT/POST` | `/api/ciclos/[id]` | Detalle / editar / `?action=cerrar\|descartar` |
+| `GET` | `/api/ciclos/[id]/mediciones` | Mediciones del ciclo |
+| `GET` | `/api/ciclos/[id]/mediciones/export` | CSV de mediciones del ciclo |
 | `GET/DELETE` | `/api/consultas` | Log de preguntas |
 
 ### IA, foto y auth
@@ -132,13 +145,16 @@ vacío: los endpoints fallarán con 500 pero el render cliente seguirá vivo.
 ## Flujo principal
 
 1. Usuario entra → middleware valida cookie `access_pin`.
-2. En `app/page.tsx` captura temp/pH/humedad, opcionalmente foto.
-3. "Analizar imagen" → `/api/analizar` corre visión IA, guarda en
+2. Elige sitio en el selector global (`SitioProvider` en `app/providers.tsx`);
+   la selección se persiste en `localStorage` y se comparte entre captura,
+   historial y configuración.
+3. En `app/page.tsx` captura temp/pH/humedad, opcionalmente foto.
+4. "Analizar imagen" → `/api/analizar` corre visión IA, guarda en
    `analisis_cache` por hash SHA-256 del buffer (reuso entre fotos idénticas).
-4. "Guardar medición" → sube foto a Blob, escribe en `mediciones`.
-5. Puede pedir diagnóstico al agente (`/api/chat` con tipo `diagnostico`)
+5. "Guardar medición" → sube foto a Blob, escribe en `mediciones`.
+6. Puede pedir diagnóstico al agente (`/api/chat` con tipo `diagnostico`)
    o diagnóstico histórico por compostera (`/api/diagnostico`).
-6. En `app/historial/page.tsx` se listan, editan o borran registros.
+7. En `app/historial/page.tsx` se listan, editan o borran registros.
 
 ## Criterio de estado
 
@@ -162,7 +178,9 @@ sitios (1)
 
 - `sitios` — lugar físico (San Francisco Bojay es el seed).
 - `composteras` — contenedor físico con `sitio_id`, `tipo`, `capacidad_kg`,
-  `estado`. Los slots del panel de configuración son composteras 1–10.
+  `estado` (`activa | inactiva | retirada`). Se crean y borran por sitio
+  desde `/configuracion` (panel del sitio activo). Solo se permite borrar
+  composteras sin historia de ciclos; las que ya corrieron se retiran.
 - `ciclos` — corrida de compostaje (`estado = activo | cerrado | descartado`).
   Un índice único parcial (`uq_ciclos_un_activo_por_compostera`) garantiza
   que haya un solo ciclo activo por compostera. `formulacion_id` del ciclo
@@ -195,7 +213,9 @@ El esquema v2 se aplica en dos vías:
 - **Fresh/dev**: `ensureSchemaV2()` en `lib/db.ts` crea/ALTER-ea en
   primera llamada (mismo patrón que el viejo `ensureTable`).
 
-Queda como deuda técnica para una fase posterior:
+Queda como deuda técnica para una fase posterior. El código cargado con
+esta deuda está marcado con comentarios `LEGACY COMPAT` (grep sobre
+`lib/db.ts`, `lib/validaciones.ts`, `lib/diagnostico.ts`):
 
 - `mediciones.compostera` sigue `NOT NULL` y lo usan `getMediciones`,
   `getMedicionesExport`, `insertConsulta` y el backfill de
@@ -207,3 +227,7 @@ Queda como deuda técnica para una fase posterior:
 - `compostera_formulaciones` se conserva como histórico legacy. La UI
   solo lo muestra como referencia; las formulaciones "vivas" viven en
   `ciclos.formulacion_id`.
+
+El plan detallado para atacar esta deuda (endurecer integridad a nivel
+BD y retirar `mediciones.compostera` en sub-fases reversibles) vive en
+`scripts/migrations/2026-04-18-fase-3-plan.md`. Aún no se ejecuta.

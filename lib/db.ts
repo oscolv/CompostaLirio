@@ -126,7 +126,19 @@ export async function ensureTable() {
 // Cada endpoint nuevo (sitios, ciclos, mediciones con ciclo, diagnóstico
 // por ciclo) la invoca. El patrón imita a ensureTable() existente.
 // =====================================================================
+let schemaReady: Promise<void> | null = null;
+
 export async function ensureSchemaV2() {
+  if (!schemaReady) {
+    schemaReady = runEnsureSchemaV2().catch((e) => {
+      schemaReady = null;
+      throw e;
+    });
+  }
+  return schemaReady;
+}
+
+async function runEnsureSchemaV2() {
   await ensureTable();
   const sql = getSQL();
 

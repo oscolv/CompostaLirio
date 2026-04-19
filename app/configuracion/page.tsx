@@ -51,10 +51,11 @@ function IconLeaf() {
 
 export default function Configuracion() {
   const [composteras, setComposteras] = useState<Compostera[]>(defaultComposteras());
-  const [loading, setLoading] = useState(true);
+  const [composterasLoading, setComposterasLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [mensaje, setMensaje] = useState("");
-  const { activos: sitiosActivos } = useSitios();
+  const { activos: sitiosActivos, loading: sitiosLoading } = useSitios();
+  const loading = composterasLoading || sitiosLoading;
 
   useEffect(() => {
     fetch("/api/composteras")
@@ -78,7 +79,7 @@ export default function Configuracion() {
         }
       })
       .catch(() => {})
-      .finally(() => setLoading(false));
+      .finally(() => setComposterasLoading(false));
   }, []);
 
   function update(id: number, field: keyof Compostera, value: string | boolean | number | null) {

@@ -288,7 +288,7 @@ export default function Historial() {
             {showChart && (
               <div className="mt-3 rounded-2xl p-4 border border-verde-100 bg-white shadow-card animate-fade-in">
                 <div className="text-[13px] font-semibold text-verde-800 mb-2">
-                  Evoluci&oacute;n de temperatura
+                  Evoluci&oacute;n de temperatura Compostera #{filtro}
                 </div>
                 <TemperatureChart puntos={tempPoints} />
               </div>

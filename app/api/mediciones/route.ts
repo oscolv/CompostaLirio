@@ -8,39 +8,13 @@ import {
   getMedicionById,
   deleteMedicion,
   updateMedicion,
-  getCicloActivo,
-  getCicloById,
 } from "@/lib/db";
 import { del } from "@vercel/blob";
 import { validarMedicionInput } from "@/lib/validaciones";
+import { resolverCiclo } from "@/lib/ciclos";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
-
-// Resuelve el ciclo_id que debe quedar persistido en la medición.
-// Prioridad: ciclo_id explícito del body > ciclo activo de la compostera.
-// Si no hay ciclo activo devuelve null con un error legible para el cliente.
-async function resolverCicloId(
-  compostera: number,
-  cicloIdExplicito: number | null | undefined,
-): Promise<{ ok: true; ciclo_id: number } | { ok: false; error: string }> {
-  if (typeof cicloIdExplicito === "number" && cicloIdExplicito > 0) {
-    const ciclo = await getCicloById(cicloIdExplicito);
-    if (!ciclo) return { ok: false, error: "Ciclo no encontrado" };
-    if (ciclo.compostera_id !== compostera) {
-      return { ok: false, error: "El ciclo no pertenece a esta compostera" };
-    }
-    return { ok: true, ciclo_id: ciclo.id as number };
-  }
-  const activo = await getCicloActivo(compostera);
-  if (!activo) {
-    return {
-      ok: false,
-      error: "No hay ciclo activo para esta compostera. Crea uno antes de registrar mediciones.",
-    };
-  }
-  return { ok: true, ciclo_id: activo.id as number };
-}
 
 export async function POST(req: NextRequest) {
   try {
@@ -52,14 +26,19 @@ export async function POST(req: NextRequest) {
     }
     const d = validado.data;
 
-    const resolved = await resolverCicloId(d.compostera, d.ciclo_id ?? undefined);
+    const resolved = await resolverCiclo(d.compostera, d.ciclo_id ?? undefined);
     if (!resolved.ok) {
-      return NextResponse.json({ error: resolved.error }, { status: 400 });
+      // Mensaje específico de este flujo: el usuario está intentando registrar.
+      const error =
+        resolved.err.code === "NO_ACTIVE_CYCLE"
+          ? "No hay ciclo activo para esta compostera. Crea uno antes de registrar mediciones."
+          : resolved.err.error;
+      return NextResponse.json({ error }, { status: resolved.err.status });
     }
 
     const result = await insertMedicion({
       compostera: d.compostera,
-      ciclo_id: resolved.ciclo_id,
+      ciclo_id: resolved.ciclo.id,
       dia: d.dia,
       temperatura: d.temperatura,
       ph: d.ph,
@@ -69,7 +48,7 @@ export async function POST(req: NextRequest) {
       foto_url: d.foto_url ?? null,
       created_at: d.fecha ?? null,
     });
-    return NextResponse.json({ ...result, ciclo_id: resolved.ciclo_id });
+    return NextResponse.json({ ...result, ciclo_id: resolved.ciclo.id });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });

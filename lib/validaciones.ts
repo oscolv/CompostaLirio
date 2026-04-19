@@ -174,6 +174,57 @@ export function validarCicloInput(body: unknown): ValidacionResultado<CicloInput
 }
 
 // =====================================================================
+// COMPOSTERA (creación)
+// sitio_id viene de la URL, no del body.
+// =====================================================================
+export type ComposteraNuevaInput = {
+  nombre: string | null;
+  fecha_inicio: string | null;
+  masa_inicial: number | null;
+  tipo: string | null;
+  capacidad_kg: number | null;
+  activa: boolean;
+};
+
+export function validarComposteraNuevaInput(body: unknown): ValidacionResultado<ComposteraNuevaInput> {
+  if (body === null || body === undefined) {
+    return { ok: true, data: { nombre: null, fecha_inicio: null, masa_inicial: null, tipo: null, capacidad_kg: null, activa: true } };
+  }
+  if (typeof body !== "object") return { ok: false, error: "Body inválido" };
+  const b = body as Record<string, unknown>;
+
+  const nombre = str(b.nombre);
+
+  let fecha_inicio: string | null = null;
+  if (b.fecha_inicio !== undefined && b.fecha_inicio !== null && b.fecha_inicio !== "") {
+    if (typeof b.fecha_inicio !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(b.fecha_inicio)) {
+      return { ok: false, error: "fecha_inicio debe ser YYYY-MM-DD" };
+    }
+    fecha_inicio = b.fecha_inicio;
+  }
+
+  let masa_inicial: number | null = null;
+  if (b.masa_inicial !== undefined && b.masa_inicial !== null && b.masa_inicial !== "") {
+    const m = num(b.masa_inicial);
+    if (m === null || m < 0) return { ok: false, error: "masa_inicial debe ser >= 0" };
+    masa_inicial = m;
+  }
+
+  const tipo = str(b.tipo);
+
+  let capacidad_kg: number | null = null;
+  if (b.capacidad_kg !== undefined && b.capacidad_kg !== null && b.capacidad_kg !== "") {
+    const c = num(b.capacidad_kg);
+    if (c === null || c < 0) return { ok: false, error: "capacidad_kg debe ser >= 0" };
+    capacidad_kg = c;
+  }
+
+  const activa = typeof b.activa === "boolean" ? b.activa : true;
+
+  return { ok: true, data: { nombre, fecha_inicio, masa_inicial, tipo, capacidad_kg, activa } };
+}
+
+// =====================================================================
 // SITIO
 // =====================================================================
 export function validarSitioInput(body: unknown): ValidacionResultado<SitioInput> {

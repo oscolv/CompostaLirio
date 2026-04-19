@@ -1,28 +1,41 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import NextImage from "next/image";
-import { useSitios } from "@/hooks/useSitios";
+import { useSitio } from "@/lib/sitio-context";
+import type { ComposteraConCounts } from "@/lib/types";
 
-type Compostera = {
+type RowSaveState = "idle" | "saving" | "saved" | "error";
+
+type Row = {
   id: number;
+  sitio_id: number;
   nombre: string;
   fecha_inicio: string;
   activa: boolean;
   masa_inicial: string;
-  sitio_id: number | null;
+  estado: "activa" | "inactiva" | "retirada";
+  ciclos_count: number;
+  mediciones_count: number;
+  saveState: RowSaveState;
+  errorMsg: string;
 };
 
-function defaultComposteras(): Compostera[] {
-  return Array.from({ length: 10 }, (_, i) => ({
-    id: i + 1,
-    nombre: "",
-    fecha_inicio: "",
-    activa: true,
-    masa_inicial: "",
-    sitio_id: null,
-  }));
+function toRow(c: ComposteraConCounts): Row {
+  return {
+    id: c.id,
+    sitio_id: c.sitio_id ?? 0,
+    nombre: c.nombre ?? "",
+    fecha_inicio: c.fecha_inicio ? c.fecha_inicio.split("T")[0] : "",
+    activa: c.activa,
+    masa_inicial: c.masa_inicial != null ? String(c.masa_inicial) : "",
+    estado: (c.estado as Row["estado"]) ?? (c.activa ? "activa" : "inactiva"),
+    ciclos_count: c.ciclos_count ?? 0,
+    mediciones_count: c.mediciones_count ?? 0,
+    saveState: "idle",
+    errorMsg: "",
+  };
 }
 
 function diasDesde(fecha: string): number | null {
@@ -50,73 +63,144 @@ function IconLeaf() {
 }
 
 export default function Configuracion() {
-  const [composteras, setComposteras] = useState<Compostera[]>(defaultComposteras());
-  const [composterasLoading, setComposterasLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [mensaje, setMensaje] = useState("");
-  const { activos: sitiosActivos, loading: sitiosLoading } = useSitios();
-  const loading = composterasLoading || sitiosLoading;
+  const { activos: sitiosActivos, sitioId, setSitioId, loading: sitiosLoading } = useSitio();
+  const [rows, setRows] = useState<Row[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
+  const [globalError, setGlobalError] = useState("");
 
-  useEffect(() => {
-    fetch("/api/composteras")
-      .then((r) => r.json())
-      .then((rows: Array<{ id: number; nombre: string | null; fecha_inicio: string | null; activa: boolean; masa_inicial: number | null; sitio_id: number | null }>) => {
-        if (Array.isArray(rows) && rows.length > 0) {
-          const merged = defaultComposteras().map((def) => {
-            const saved = rows.find((r) => r.id === def.id);
-            return saved
-              ? {
-                  id: saved.id,
-                  nombre: saved.nombre || "",
-                  fecha_inicio: saved.fecha_inicio ? saved.fecha_inicio.split("T")[0] : "",
-                  activa: saved.activa,
-                  masa_inicial: saved.masa_inicial != null ? String(saved.masa_inicial) : "",
-                  sitio_id: saved.sitio_id ?? null,
-                }
-              : def;
-          });
-          setComposteras(merged);
-        }
-      })
-      .catch(() => {})
-      .finally(() => setComposterasLoading(false));
+  const sitioActual = sitiosActivos.find((s) => s.id === sitioId) ?? null;
+
+  const fetchRows = useCallback(async (sid: number) => {
+    setLoading(true);
+    setGlobalError("");
+    try {
+      const res = await fetch(`/api/sitios/${sid}/composteras?counts=1`, { cache: "no-store" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = (await res.json()) as ComposteraConCounts[];
+      setRows(data.map(toRow));
+    } catch {
+      setGlobalError("No se pudo cargar la lista de composteras.");
+      setRows([]);
+    }
+    setLoading(false);
   }, []);
 
-  function update(id: number, field: keyof Compostera, value: string | boolean | number | null) {
-    setComposteras((prev) => prev.map((c) => (c.id === id ? { ...c, [field]: value } : c)));
+  useEffect(() => {
+    if (sitioId == null) {
+      setRows([]);
+      setLoading(false);
+      return;
+    }
+    fetchRows(sitioId);
+  }, [sitioId, fetchRows]);
+
+  function updateRow(id: number, patch: Partial<Row>) {
+    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   }
 
-  async function guardar() {
-    setSaving(true);
-    setMensaje("");
+  async function crearCompostera() {
+    if (sitioId == null) return;
+    setCreating(true);
+    setGlobalError("");
     try {
-      const payload = composteras.map((c) => {
-        const masa = c.masa_inicial.trim() === "" ? null : Number(c.masa_inicial);
-        return {
-          id: c.id,
-          nombre: c.nombre || null,
-          fecha_inicio: c.fecha_inicio || null,
-          activa: c.activa,
-          masa_inicial: masa != null && !Number.isNaN(masa) ? masa : null,
-          sitio_id: c.sitio_id,
-        };
+      const res = await fetch(`/api/sitios/${sitioId}/composteras`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
       });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setGlobalError(data.error || "No se pudo crear la compostera.");
+        setCreating(false);
+        return;
+      }
+      await fetchRows(sitioId);
+    } catch {
+      setGlobalError("Error de conexión al crear.");
+    }
+    setCreating(false);
+  }
+
+  async function guardarFila(row: Row) {
+    updateRow(row.id, { saveState: "saving", errorMsg: "" });
+    const masa = row.masa_inicial.trim() === "" ? null : Number(row.masa_inicial);
+    const payload = {
+      composteras: [
+        {
+          id: row.id,
+          nombre: row.nombre || null,
+          fecha_inicio: row.fecha_inicio || null,
+          activa: row.activa,
+          masa_inicial: masa != null && !Number.isNaN(masa) ? masa : null,
+          sitio_id: row.sitio_id,
+        },
+      ],
+    };
+    try {
       const res = await fetch("/api/composteras", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ composteras: payload }),
+        body: JSON.stringify(payload),
       });
       if (res.ok) {
-        setMensaje("Guardado");
-        setTimeout(() => setMensaje(""), 2500);
+        updateRow(row.id, { saveState: "saved" });
+        setTimeout(() => updateRow(row.id, { saveState: "idle" }), 2000);
       } else {
-        setMensaje("Error al guardar");
+        updateRow(row.id, { saveState: "error", errorMsg: "No se guardó" });
       }
     } catch {
-      setMensaje("Error de conexi\u00f3n");
+      updateRow(row.id, { saveState: "error", errorMsg: "Error de conexión" });
     }
-    setSaving(false);
   }
+
+  async function eliminarFila(row: Row) {
+    if (row.ciclos_count > 0) return;
+    if (!window.confirm(`¿Eliminar compostera #${row.id}? Esta acción no se puede deshacer.`)) return;
+    try {
+      const res = await fetch(`/api/composteras/${row.id}`, { method: "DELETE" });
+      if (res.ok) {
+        setRows((prev) => prev.filter((r) => r.id !== row.id));
+      } else {
+        const data = await res.json().catch(() => ({}));
+        if (res.status === 409) {
+          updateRow(row.id, {
+            ciclos_count: data.ciclos_count ?? row.ciclos_count,
+            mediciones_count: data.mediciones_count ?? row.mediciones_count,
+            errorMsg: "Tiene historia; usa Retirar",
+          });
+        } else {
+          updateRow(row.id, { errorMsg: data.error || "No se pudo eliminar" });
+        }
+      }
+    } catch {
+      updateRow(row.id, { errorMsg: "Error de conexión" });
+    }
+  }
+
+  async function retirarFila(row: Row) {
+    if (!window.confirm(`¿Retirar compostera #${row.id}? Quedará marcada como retirada y sin actividad en el monitor.`)) return;
+    try {
+      const res = await fetch(`/api/composteras/${row.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ estado: "retirada" }),
+      });
+      if (res.ok) {
+        updateRow(row.id, { estado: "retirada", activa: false });
+      } else {
+        const data = await res.json().catch(() => ({}));
+        updateRow(row.id, { errorMsg: data.error || "No se pudo retirar" });
+      }
+    } catch {
+      updateRow(row.id, { errorMsg: "Error de conexión" });
+    }
+  }
+
+  const masaTotal = rows.reduce((acc, r) => {
+    const n = Number(r.masa_inicial);
+    return acc + (Number.isFinite(n) ? n : 0);
+  }, 0);
 
   return (
     <div className="min-h-screen bg-crema-100">
@@ -133,7 +217,7 @@ export default function Configuracion() {
         <div className="relative z-10 h-full max-w-[480px] mx-auto px-5 py-4 flex flex-col justify-between">
           <div>
             <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-verde-100 drop-shadow-sm">
-              San Francisco Bojay
+              {sitioActual?.nombre ?? "Configuración"}
             </div>
             <h1 className="font-display text-[26px] font-black leading-tight tracking-tight mt-0.5 drop-shadow">
               Configuraci&oacute;n
@@ -174,160 +258,235 @@ export default function Configuracion() {
 
         <div className="page-card">
           <h2 className="text-[15px] font-semibold text-verde-900 mb-1">Composteras</h2>
-          <p className="text-[13px] text-gray-400 mb-5 leading-snug">
-            Configura la fecha de inicio de cada compostera. La app calcula autom&aacute;ticamente el d&iacute;a del proceso.
+          <p className="text-[13px] text-gray-400 mb-4 leading-snug">
+            {sitioActual
+              ? `Composteras del sitio "${sitioActual.nombre}".`
+              : "Elige un sitio para ver sus composteras."}
           </p>
 
-          {loading ? (
+          {sitiosActivos.length > 1 && (
+            <div className="mb-4">
+              <label className="input-label">Sitio activo</label>
+              <select
+                value={sitioId ?? ""}
+                onChange={(e) => setSitioId(e.target.value ? parseInt(e.target.value, 10) : null)}
+                className="input-field"
+              >
+                <option value="">— Elige un sitio —</option>
+                {sitiosActivos.map((s) => (
+                  <option key={s.id} value={s.id}>{s.nombre}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {globalError && (
+            <div className="mb-3 px-3 py-2 rounded-xl text-[13px] font-semibold text-red-700 bg-red-50 ring-1 ring-red-200">
+              {globalError}
+            </div>
+          )}
+
+          {sitioId == null && !sitiosLoading && (
+            <div className="text-center text-gray-400 py-8 text-[13px]">
+              Elige un sitio arriba para administrar sus composteras.
+            </div>
+          )}
+
+          {sitioId != null && (loading || sitiosLoading) && (
             <div className="text-center text-verde-600 py-12 text-[14px] animate-pulse-fade">
               Cargando...
             </div>
-          ) : (
-            <div className="flex flex-col gap-3">
-              {composteras.map((c) => {
-                const dias = diasDesde(c.fecha_inicio);
-                return (
-                  <div
-                    key={c.id}
-                    className={`rounded-xl p-3.5 border transition-all duration-200 ${
-                      c.activa
-                        ? "border-verde-200/60 bg-verde-50/30"
-                        : "border-gray-200 bg-gray-50 opacity-50"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-2.5">
-                      <div className="flex items-center gap-2">
-                        <span className={`w-2 h-2 rounded-full ${c.activa ? "bg-verde-500" : "bg-gray-300"}`} />
-                        <span className="font-semibold text-[14px] text-verde-900">#{c.id}</span>
-                        {dias !== null && (
-                          <span className="flex items-center gap-1 text-[11px] font-medium text-verde-600 bg-verde-100 px-2 py-0.5 rounded-full">
-                            <IconLeaf />
-                            D&iacute;a {dias}
-                          </span>
+          )}
+
+          {sitioId != null && !loading && !sitiosLoading && rows.length === 0 && (
+            <div className="text-center py-8">
+              <p className="text-[13px] text-gray-500 mb-4">
+                Este sitio aún no tiene composteras.
+              </p>
+              <button
+                onClick={crearCompostera}
+                disabled={creating}
+                className="btn-primary"
+              >
+                {creating ? "Creando..." : "Crear primera compostera"}
+              </button>
+            </div>
+          )}
+
+          {sitioId != null && !loading && rows.length > 0 && (
+            <>
+              <button
+                onClick={crearCompostera}
+                disabled={creating}
+                className="w-full mb-4 px-4 py-3 rounded-xl border-2 border-dashed border-verde-300 text-verde-700 text-[13px] font-semibold transition-colors hover:border-verde-500 hover:bg-verde-50/50 active:scale-[0.98] disabled:opacity-50"
+              >
+                {creating ? "Creando..." : "+ Nueva compostera"}
+              </button>
+
+              <div className="flex flex-col gap-3">
+                {rows.map((r) => {
+                  const dias = diasDesde(r.fecha_inicio);
+                  const retirada = r.estado === "retirada";
+                  const puedeEliminar = r.ciclos_count === 0 && r.mediciones_count === 0;
+
+                  return (
+                    <div
+                      key={r.id}
+                      className={`rounded-xl p-3.5 border transition-all duration-200 ${
+                        retirada
+                          ? "border-gray-200 bg-gray-50 opacity-60"
+                          : r.activa
+                            ? "border-verde-200/60 bg-verde-50/30"
+                            : "border-gray-200 bg-gray-50 opacity-70"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-2.5">
+                        <div className="flex items-center gap-2">
+                          <span className={`w-2 h-2 rounded-full ${
+                            retirada ? "bg-gray-400" : r.activa ? "bg-verde-500" : "bg-gray-300"
+                          }`} />
+                          <span className="font-semibold text-[14px] text-verde-900">#{r.id}</span>
+                          {retirada && (
+                            <span className="text-[11px] font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+                              Retirada
+                            </span>
+                          )}
+                          {!retirada && dias !== null && (
+                            <span className="flex items-center gap-1 text-[11px] font-medium text-verde-600 bg-verde-100 px-2 py-0.5 rounded-full">
+                              <IconLeaf />
+                              D&iacute;a {dias}
+                            </span>
+                          )}
+                        </div>
+                        {!retirada && (
+                          <label className="flex items-center gap-2 text-[12px] text-gray-400 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={r.activa}
+                              onChange={(e) => updateRow(r.id, { activa: e.target.checked })}
+                              className="w-4 h-4 accent-verde-700 rounded"
+                            />
+                            Activa
+                          </label>
                         )}
                       </div>
-                      <label className="flex items-center gap-2 text-[12px] text-gray-400 cursor-pointer select-none">
-                        <input
-                          type="checkbox"
-                          checked={c.activa}
-                          onChange={(e) => update(c.id, "activa", e.target.checked)}
-                          className="w-4 h-4 accent-verde-700 rounded"
-                        />
-                        Activa
-                      </label>
-                    </div>
 
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-[10px] font-semibold text-verde-700/50 uppercase tracking-wider block mb-1">
-                          Nombre
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="Ej: Pila norte"
-                          value={c.nombre}
-                          onChange={(e) => update(c.id, "nombre", e.target.value)}
-                          className="w-full px-2.5 py-2 border border-verde-200/50 rounded-lg text-[13px] bg-white outline-none focus:border-verde-400 transition-colors"
-                        />
+                      {(r.ciclos_count > 0 || r.mediciones_count > 0) && (
+                        <div className="text-[11px] text-gray-500 mb-2">
+                          {r.ciclos_count} ciclo{r.ciclos_count === 1 ? "" : "s"} · {r.mediciones_count} medici{r.mediciones_count === 1 ? "ón" : "ones"}
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[10px] font-semibold text-verde-700/50 uppercase tracking-wider block mb-1">
+                            Nombre
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="Ej: Pila norte"
+                            value={r.nombre}
+                            disabled={retirada}
+                            onChange={(e) => updateRow(r.id, { nombre: e.target.value })}
+                            className="w-full px-2.5 py-2 border border-verde-200/50 rounded-lg text-[13px] bg-white outline-none focus:border-verde-400 transition-colors disabled:bg-gray-100"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-semibold text-verde-700/50 uppercase tracking-wider block mb-1">
+                            Fecha de inicio
+                          </label>
+                          <input
+                            type="date"
+                            value={r.fecha_inicio}
+                            disabled={retirada}
+                            onChange={(e) => updateRow(r.id, { fecha_inicio: e.target.value })}
+                            className="w-full px-2.5 py-2 border border-verde-200/50 rounded-lg text-[13px] bg-white outline-none focus:border-verde-400 transition-colors disabled:bg-gray-100"
+                          />
+                        </div>
+                        <div className="col-span-2">
+                          <label className="text-[10px] font-semibold text-verde-700/50 uppercase tracking-wider block mb-1">
+                            Masa inicial (kg)
+                          </label>
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            min="0"
+                            step="0.1"
+                            placeholder="Ej: 200"
+                            value={r.masa_inicial}
+                            disabled={retirada}
+                            onChange={(e) => updateRow(r.id, { masa_inicial: e.target.value })}
+                            className="w-full px-2.5 py-2 border border-verde-200/50 rounded-lg text-[13px] bg-white outline-none focus:border-verde-400 transition-colors disabled:bg-gray-100"
+                          />
+                        </div>
                       </div>
-                      <div>
-                        <label className="text-[10px] font-semibold text-verde-700/50 uppercase tracking-wider block mb-1">
-                          Fecha de inicio
-                        </label>
-                        <input
-                          type="date"
-                          value={c.fecha_inicio}
-                          onChange={(e) => update(c.id, "fecha_inicio", e.target.value)}
-                          className="w-full px-2.5 py-2 border border-verde-200/50 rounded-lg text-[13px] bg-white outline-none focus:border-verde-400 transition-colors"
-                        />
-                      </div>
-                      <div className="col-span-2">
-                        <label className="text-[10px] font-semibold text-verde-700/50 uppercase tracking-wider block mb-1">
-                          Masa inicial (kg)
-                        </label>
-                        <input
-                          type="number"
-                          inputMode="decimal"
-                          min="0"
-                          step="0.1"
-                          placeholder="Ej: 200"
-                          value={c.masa_inicial}
-                          onChange={(e) => update(c.id, "masa_inicial", e.target.value)}
-                          className="w-full px-2.5 py-2 border border-verde-200/50 rounded-lg text-[13px] bg-white outline-none focus:border-verde-400 transition-colors"
-                        />
-                      </div>
-                      <div className="col-span-2">
-                        <label className="text-[10px] font-semibold text-verde-700/50 uppercase tracking-wider block mb-1">
-                          Sitio
-                        </label>
-                        <select
-                          value={c.sitio_id ?? ""}
-                          onChange={(e) => {
-                            const v = e.target.value;
-                            update(c.id, "sitio_id", v === "" ? null : Number(v));
-                          }}
-                          className="w-full px-2.5 py-2 border border-verde-200/50 rounded-lg text-[13px] bg-white outline-none focus:border-verde-400 transition-colors"
+
+                      {!retirada && (
+                        <div className="mt-3 flex gap-2">
+                          <button
+                            onClick={() => guardarFila(r)}
+                            disabled={r.saveState === "saving"}
+                            className="flex-1 px-3 py-2 rounded-lg bg-verde-700 text-white text-[12px] font-semibold shadow-card transition-all active:scale-[0.98] disabled:bg-gray-300"
+                          >
+                            {r.saveState === "saving"
+                              ? "Guardando..."
+                              : r.saveState === "saved"
+                                ? "✓ Guardado"
+                                : "Guardar"}
+                          </button>
+                          {puedeEliminar ? (
+                            <button
+                              onClick={() => eliminarFila(r)}
+                              className="px-3 py-2 rounded-lg text-[12px] font-semibold text-red-600 bg-white border border-red-200 hover:bg-red-50 active:scale-[0.98] transition-all"
+                            >
+                              Eliminar
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => retirarFila(r)}
+                              className="px-3 py-2 rounded-lg text-[12px] font-semibold text-tierra-600 bg-white border border-tierra-200 hover:bg-crema-200 active:scale-[0.98] transition-all"
+                              title="Tiene historia — no se puede borrar, pero sí retirar"
+                            >
+                              Retirar
+                            </button>
+                          )}
+                        </div>
+                      )}
+
+                      {r.errorMsg && (
+                        <div className="mt-2 text-[11px] font-semibold text-red-600">{r.errorMsg}</div>
+                      )}
+
+                      <div className="mt-3 flex flex-col gap-1">
+                        <Link
+                          href={`/configuracion/composteras/${r.id}/ciclos`}
+                          className="flex items-center justify-between text-[12px] font-medium text-verde-700 hover:text-verde-900 transition-colors"
                         >
-                          <option value="">— Sin asignar —</option>
-                          {sitiosActivos.map((s) => (
-                            <option key={s.id} value={s.id}>
-                              {s.nombre}
-                            </option>
-                          ))}
-                        </select>
+                          <span>Ciclos de esta compostera</span>
+                          <span className="text-base leading-none">→</span>
+                        </Link>
+                        <Link
+                          href={`/configuracion/composteras/${r.id}`}
+                          className="flex items-center justify-between text-[12px] font-medium text-verde-700 hover:text-verde-900 transition-colors"
+                        >
+                          <span>Formulaciones y detalle (legacy)</span>
+                          <span className="text-base leading-none">→</span>
+                        </Link>
                       </div>
                     </div>
+                  );
+                })}
+              </div>
 
-                    <div className="mt-3 flex flex-col gap-1">
-                      <Link
-                        href={`/configuracion/composteras/${c.id}/ciclos`}
-                        className="flex items-center justify-between text-[12px] font-medium text-verde-700 hover:text-verde-900 transition-colors"
-                      >
-                        <span>Ciclos de esta compostera</span>
-                        <span className="text-base leading-none">→</span>
-                      </Link>
-                      <Link
-                        href={`/configuracion/composteras/${c.id}`}
-                        className="flex items-center justify-between text-[12px] font-medium text-verde-700 hover:text-verde-900 transition-colors"
-                      >
-                        <span>Formulaciones y detalle (legacy)</span>
-                        <span className="text-base leading-none">→</span>
-                      </Link>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {!loading && (
-            <div className="mt-5 rounded-xl border border-verde-200/60 bg-verde-50/60 px-4 py-3 flex items-center justify-between">
-              <span className="text-[12px] font-semibold text-verde-700 uppercase tracking-wider">
-                Masa total de composta
-              </span>
-              <span className="text-[18px] font-bold text-verde-900 tabular-nums">
-                {composteras
-                  .reduce((acc, c) => {
-                    const n = Number(c.masa_inicial);
-                    return acc + (Number.isFinite(n) ? n : 0);
-                  }, 0)
-                  .toLocaleString("es-MX", { maximumFractionDigits: 2 })} kg
-              </span>
-            </div>
-          )}
-
-          <div className="sticky bottom-4 mt-5">
-            <button onClick={guardar} disabled={saving} className="btn-primary">
-              {saving ? "Guardando..." : "Guardar configuraci\u00f3n"}
-            </button>
-          </div>
-
-          {mensaje && (
-            <div className={`text-center text-[13px] font-medium mt-3 animate-fade-in ${
-              mensaje === "Guardado" ? "text-verde-600" : "text-red-600"
-            }`}>
-              {mensaje === "Guardado" ? "\u2713 Guardado correctamente" : "\u2717 " + mensaje}
-            </div>
+              <div className="mt-5 rounded-xl border border-verde-200/60 bg-verde-50/60 px-4 py-3 flex items-center justify-between">
+                <span className="text-[12px] font-semibold text-verde-700 uppercase tracking-wider">
+                  Masa total de composta
+                </span>
+                <span className="text-[18px] font-bold text-verde-900 tabular-nums">
+                  {masaTotal.toLocaleString("es-MX", { maximumFractionDigits: 2 })} kg
+                </span>
+              </div>
+            </>
           )}
         </div>
       </main>

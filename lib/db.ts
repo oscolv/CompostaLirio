@@ -521,6 +521,103 @@ export async function getComposterasBySitio(sitio_id: number) {
   return sql`SELECT * FROM composteras WHERE sitio_id = ${sitio_id} ORDER BY id`;
 }
 
+// Lista composteras de un sitio con conteo de ciclos y mediciones asociadas.
+// Mediciones se cuentan vía ciclos.id (cadena real), no vía mediciones.compostera
+// legacy. Usado por /configuracion para decidir si una compostera se puede borrar.
+export async function getComposterasConCountsBySitio(sitio_id: number) {
+  const sql = getSQL();
+  return sql`
+    SELECT
+      cp.*,
+      COUNT(DISTINCT c.id) AS ciclos_count,
+      COUNT(DISTINCT m.id) AS mediciones_count
+    FROM composteras cp
+    LEFT JOIN ciclos c ON c.compostera_id = cp.id
+    LEFT JOIN mediciones m ON m.ciclo_id = c.id
+    WHERE cp.sitio_id = ${sitio_id}
+    GROUP BY cp.id
+    ORDER BY cp.id
+  `;
+}
+
+// Crea compostera con id auto = MAX+1 en una sola sentencia (Neon HTTP no
+// soporta transacciones multi-statement). En caso de race con duplicate key,
+// reintentar una vez es suficiente para la escala de esta app.
+export async function createCompostera(data: {
+  sitio_id: number;
+  nombre: string | null;
+  fecha_inicio: string | null;
+  masa_inicial: number | null;
+  tipo?: string | null;
+  capacidad_kg?: number | null;
+  activa?: boolean;
+}) {
+  const sql = getSQL();
+  const activa = data.activa ?? true;
+  const estado = activa ? "activa" : "inactiva";
+  const tipo = data.tipo ?? null;
+  const capacidad_kg = data.capacidad_kg ?? null;
+
+  async function tryInsert() {
+    const rows = await sql`
+      INSERT INTO composteras (id, sitio_id, nombre, fecha_inicio, activa, masa_inicial, tipo, capacidad_kg, estado)
+      SELECT
+        COALESCE(MAX(id), 0) + 1,
+        ${data.sitio_id},
+        ${data.nombre},
+        ${data.fecha_inicio},
+        ${activa},
+        ${data.masa_inicial},
+        ${tipo},
+        ${capacidad_kg},
+        ${estado}
+      FROM composteras
+      RETURNING *
+    `;
+    return rows[0];
+  }
+
+  try {
+    return await tryInsert();
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg.includes("duplicate key")) {
+      return await tryInsert();
+    }
+    throw e;
+  }
+}
+
+export async function countDependenciasCompostera(id: number) {
+  const sql = getSQL();
+  const rows = await sql`
+    SELECT
+      (SELECT COUNT(*) FROM ciclos WHERE compostera_id = ${id})::int AS ciclos,
+      (SELECT COUNT(*) FROM mediciones m
+         JOIN ciclos c ON c.id = m.ciclo_id
+         WHERE c.compostera_id = ${id})::int AS mediciones
+  `;
+  const r = rows[0] as { ciclos: number; mediciones: number };
+  return { ciclos: r.ciclos, mediciones: r.mediciones };
+}
+
+export async function deleteCompostera(id: number) {
+  const sql = getSQL();
+  await sql`DELETE FROM composteras WHERE id = ${id}`;
+}
+
+export async function setEstadoCompostera(id: number, estado: "activa" | "inactiva" | "retirada") {
+  const sql = getSQL();
+  const activa = estado === "activa";
+  const rows = await sql`
+    UPDATE composteras
+    SET estado = ${estado}, activa = ${activa}
+    WHERE id = ${id}
+    RETURNING *
+  `;
+  return rows[0] || null;
+}
+
 /* ============================================================
  * FORMULACIONES
  * ============================================================ */

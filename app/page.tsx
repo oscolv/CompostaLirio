@@ -7,7 +7,7 @@ import Markdown from "react-markdown";
 import { getStatus } from "@/lib/estado";
 import { hoyISO, horaActual, combinarFechaHora, diasDesde } from "@/lib/fechas";
 import { HUMEDAD_NIVELES } from "@/lib/humedad";
-import type { ComposteraInfo, Message, Ciclo } from "@/lib/types";
+import type { Message, Ciclo } from "@/lib/types";
 import {
   IconClipboard,
   IconChat,
@@ -305,12 +305,7 @@ export default function Home() {
       ? getStatus(parseFloat(temp), parseFloat(ph), parseFloat(hum), diaActual)
       : null;
 
-  // Lista de composteras visibles para selectores. Si no hay API data aún, fallback legacy 1–10.
-  const composterasVisibles = activeComposteras.length > 0
-    ? activeComposteras
-    : (sitiosActivos.length === 0
-        ? Array.from({ length: 10 }, (_, i) => ({ id: i + 1, nombre: null } as ComposteraInfo))
-        : []);
+  const composterasVisibles = activeComposteras;
 
   const mostrarSelectorSitio = sitiosActivos.length > 1;
 
@@ -741,10 +736,10 @@ export default function Home() {
               <div className="mb-4">
                 <label className="input-label">Compostera</label>
                 <select value={diagCompostera} onChange={(e) => setDiagCompostera(e.target.value)} className="input-field">
-                  {(activeComposteras.length > 0
-                    ? activeComposteras
-                    : Array.from({ length: 10 }, (_, i) => ({ id: i + 1, nombre: null } as ComposteraInfo))
-                  ).map((c) => (
+                  {activeComposteras.length === 0 && (
+                    <option value="">— Sin composteras en este sitio —</option>
+                  )}
+                  {activeComposteras.map((c) => (
                     <option key={c.id} value={c.id}>
                       #{c.id}{c.nombre ? ` \u2014 ${c.nombre}` : ""}
                     </option>

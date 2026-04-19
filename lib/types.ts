@@ -30,6 +30,11 @@ export type ComposteraInfo = {
   estado?: ComposteraEstado;
 };
 
+export type ComposteraConCounts = ComposteraInfo & {
+  ciclos_count: number;
+  mediciones_count: number;
+};
+
 export type Sitio = {
   id: number;
   nombre: string;

@@ -311,10 +311,7 @@ export default function Historial() {
               className="input-field flex-1"
             >
               <option value="">Todas las composteras</option>
-              {(composterasDelSitio.length > 0
-                ? composterasDelSitio
-                : Array.from({ length: 10 }, (_, i) => ({ id: i + 1, nombre: null } as { id: number; nombre: string | null }))
-              ).map((c) => (
+              {composterasDelSitio.map((c) => (
                 <option key={c.id} value={c.id}>
                   Compostera #{c.id}{c.nombre ? ` — ${c.nombre}` : ""}
                 </option>
@@ -523,8 +520,8 @@ export default function Historial() {
                           onChange={(e) => setEditForm({ ...editForm, compostera: parseInt(e.target.value) })}
                           className="input-field text-[13px] py-2"
                         >
-                          {Array.from({ length: 10 }, (_, i) => (
-                            <option key={i + 1} value={i + 1}>#{i + 1}</option>
+                          {composterasDelSitio.map((c) => (
+                            <option key={c.id} value={c.id}>#{c.id}</option>
                           ))}
                         </select>
                       </div>

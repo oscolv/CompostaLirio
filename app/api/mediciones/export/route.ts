@@ -3,6 +3,7 @@ import {
   ensureSchemaV2,
   getMedicionesExport,
   getMedicionesExportByCiclo,
+  getMedicionesExportBySitio,
 } from "@/lib/db";
 
 function csvField(value: string): string {
@@ -18,14 +19,19 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const cicloId = searchParams.get("ciclo_id");
     const compostera = searchParams.get("compostera");
+    const sitioId = searchParams.get("sitio_id");
 
-    // Prioridad: ciclo_id > compostera > todo
+    // Prioridad: ciclo_id > compostera > sitio_id > todo
+    // (alineado con GET /api/mediciones)
     let rows;
     if (cicloId) {
       const n = parseInt(cicloId, 10);
       rows = Number.isInteger(n) && n > 0 ? await getMedicionesExportByCiclo(n) : [];
     } else if (compostera) {
       rows = await getMedicionesExport(parseInt(compostera));
+    } else if (sitioId) {
+      const n = parseInt(sitioId, 10);
+      rows = Number.isInteger(n) && n > 0 ? await getMedicionesExportBySitio(n) : [];
     } else {
       rows = await getMedicionesExport();
     }

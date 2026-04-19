@@ -943,6 +943,17 @@ export async function getMedicionesBySitio(sitio_id: number) {
   `;
 }
 
+export async function getMedicionesExportBySitio(sitio_id: number) {
+  const sql = getSQL();
+  return sql`
+    SELECT m.*
+    FROM mediciones m
+    JOIN composteras c ON c.id = m.compostera
+    WHERE c.sitio_id = ${sitio_id}
+    ORDER BY m.created_at ASC
+  `;
+}
+
 /* ============================================================
  * CONSULTAS con ciclo_id
  * ============================================================ */

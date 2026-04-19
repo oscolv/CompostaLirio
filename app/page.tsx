@@ -23,20 +23,12 @@ import { usePhotoUpload } from "@/hooks/usePhotoUpload";
 import { useImageAnalysis } from "@/hooks/useImageAnalysis";
 import { useFotoModal } from "@/hooks/useFotoModal";
 import { useComposteras } from "@/hooks/useComposteras";
-import { useSitios } from "@/hooks/useSitios";
+import { useSitio } from "@/lib/sitio-context";
 import { useCiclos } from "@/hooks/useCiclos";
 
 export default function Home() {
   const [mode, setMode] = useState<"select" | "registro" | "pregunta" | "chat" | "diagnostico-historico">("select");
-  const { activos: sitiosActivos } = useSitios();
-  const [sitioId, setSitioId] = useState<number | null>(null);
-
-  // Auto-seleccionar sitio único si solo hay uno activo.
-  useEffect(() => {
-    if (sitioId == null && sitiosActivos.length === 1) {
-      setSitioId(sitiosActivos[0].id);
-    }
-  }, [sitiosActivos, sitioId]);
+  const { activos: sitiosActivos, sitioId, setSitioId } = useSitio();
 
   const { composteras, activas: activeComposteras } = useComposteras(sitioId);
   const [compostera, setCompostera] = useState("1");

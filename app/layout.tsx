@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { Providers } from "./providers";
 
 export const metadata: Metadata = {
   title: "Composta Lirio — San Francisco Bojay",
@@ -29,7 +30,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="es">
-      <body className="font-sans text-gray-900 antialiased">{children}</body>
+      <body className="font-sans text-gray-900 antialiased">
+        <Providers>{children}</Providers>
+      </body>
     </html>
   );
 }

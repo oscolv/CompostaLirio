@@ -14,7 +14,7 @@ import { AnalisisBadge } from "@/components/ui/AnalisisBadge";
 import { useImageAnalysis } from "@/hooks/useImageAnalysis";
 import { useFotoModal } from "@/hooks/useFotoModal";
 import { MetricChart } from "@/components/charts/MetricChart";
-import { useSitios } from "@/hooks/useSitios";
+import { useSitio } from "@/lib/sitio-context";
 import { useComposteras } from "@/hooks/useComposteras";
 import { useCiclos } from "@/hooks/useCiclos";
 
@@ -29,9 +29,8 @@ const METRICAS: { key: MetricaKey; label: string; formatY: (v: number) => string
 export default function Historial() {
   const [mediciones, setMediciones] = useState<Medicion[]>([]);
   const [filtro, setFiltro] = useState("");
-  const [sitioFiltro, setSitioFiltro] = useState<number | null>(null);
+  const { activos: sitiosActivos, sitioId: sitioFiltro, setSitioId: setSitioFiltro } = useSitio();
   const [cicloFiltro, setCicloFiltro] = useState<number | null>(null);
-  const { activos: sitiosActivos } = useSitios();
   const { activas: composterasDelSitio } = useComposteras(sitioFiltro);
   const composteraIdNum = filtro ? parseInt(filtro, 10) : null;
   const { ciclos: ciclosCompostera } = useCiclos(composteraIdNum);

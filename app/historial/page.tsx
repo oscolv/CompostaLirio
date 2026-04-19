@@ -13,7 +13,15 @@ import { FotoModal } from "@/components/ui/FotoModal";
 import { AnalisisBadge } from "@/components/ui/AnalisisBadge";
 import { useImageAnalysis } from "@/hooks/useImageAnalysis";
 import { useFotoModal } from "@/hooks/useFotoModal";
-import { TemperatureChart } from "@/components/charts/TemperatureChart";
+import { MetricChart } from "@/components/charts/MetricChart";
+
+type MetricaKey = "temperatura" | "ph" | "humedad";
+
+const METRICAS: { key: MetricaKey; label: string; formatY: (v: number) => string; ariaLabel: string }[] = [
+  { key: "temperatura", label: "Temp", formatY: (v) => `${v.toFixed(0)}\u00b0`, ariaLabel: "Gráfica de temperatura" },
+  { key: "ph", label: "pH", formatY: (v) => v.toFixed(1), ariaLabel: "Gráfica de pH" },
+  { key: "humedad", label: "Humedad", formatY: (v) => `${v.toFixed(0)}%`, ariaLabel: "Gráfica de humedad" },
+];
 
 export default function Historial() {
   const [mediciones, setMediciones] = useState<Medicion[]>([]);
@@ -200,16 +208,18 @@ export default function Historial() {
 
   const [downloading, setDownloading] = useState(false);
   const [showChart, setShowChart] = useState(false);
+  const [metrica, setMetrica] = useState<MetricaKey>("temperatura");
   const fotoModal = useFotoModal();
 
   useEffect(() => { setShowChart(false); }, [filtro]);
 
-  const tempPoints = filtro
+  const chartPoints = filtro
     ? mediciones
-        .filter((m) => typeof m.temperatura === "number" && !isNaN(m.temperatura))
-        .map((m) => ({ fecha: new Date(m.created_at), temperatura: Number(m.temperatura) }))
+        .filter((m) => typeof m[metrica] === "number" && !isNaN(m[metrica] as number))
+        .map((m) => ({ fecha: new Date(m.created_at), valor: Number(m[metrica]) }))
     : [];
-  const canShowChart = !!filtro && tempPoints.length > 0;
+  const canShowChart = !!filtro && chartPoints.length > 0;
+  const metricaActiva = METRICAS.find((m) => m.key === metrica) ?? METRICAS[0];
 
   async function downloadCSV() {
     setDownloading(true);
@@ -287,10 +297,32 @@ export default function Historial() {
             </button>
             {showChart && (
               <div className="mt-3 rounded-2xl p-4 border border-verde-100 bg-white shadow-card animate-fade-in">
-                <div className="text-[13px] font-semibold text-verde-800 mb-2">
-                  Evoluci&oacute;n de temperatura Compostera #{filtro}
+                <div className="flex gap-1.5 mb-3 p-1 bg-verde-50 rounded-xl">
+                  {METRICAS.map((m) => {
+                    const active = metrica === m.key;
+                    return (
+                      <button
+                        key={m.key}
+                        onClick={() => setMetrica(m.key)}
+                        className={`flex-1 py-2 rounded-lg text-[12px] font-semibold transition-all ${
+                          active
+                            ? "bg-white text-verde-800 shadow-card"
+                            : "text-verde-700/70 hover:text-verde-800"
+                        }`}
+                      >
+                        {m.label}
+                      </button>
+                    );
+                  })}
                 </div>
-                <TemperatureChart puntos={tempPoints} />
+                <div className="text-[13px] font-semibold text-verde-800 mb-2">
+                  Evoluci&oacute;n de {metricaActiva.label.toLowerCase()} Compostera #{filtro}
+                </div>
+                <MetricChart
+                  puntos={chartPoints}
+                  formatY={metricaActiva.formatY}
+                  ariaLabel={`${metricaActiva.ariaLabel} compostera ${filtro}`}
+                />
               </div>
             )}
           </div>

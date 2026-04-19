@@ -2,19 +2,29 @@
 
 import { useMemo } from "react";
 
-export type TempPoint = { fecha: Date; temperatura: number };
+export type MetricPoint = { fecha: Date; valor: number };
 
 type Props = {
-  puntos: TempPoint[];
-  width?: number;
+  puntos: MetricPoint[];
   height?: number;
+  formatY?: (v: number) => string;
+  yMinFixed?: number;
+  yMaxFixed?: number;
+  ariaLabel?: string;
 };
 
-export function TemperatureChart({ puntos, height = 200 }: Props) {
+export function MetricChart({
+  puntos,
+  height = 200,
+  formatY = (v) => v.toFixed(0),
+  yMinFixed,
+  yMaxFixed,
+  ariaLabel = "Gráfica",
+}: Props) {
   const data = useMemo(
     () =>
       puntos
-        .filter((p) => Number.isFinite(p.temperatura) && !isNaN(p.fecha.getTime()))
+        .filter((p) => Number.isFinite(p.valor) && !isNaN(p.fecha.getTime()))
         .sort((a, b) => a.fecha.getTime() - b.fecha.getTime()),
     [puntos],
   );
@@ -29,22 +39,22 @@ export function TemperatureChart({ puntos, height = 200 }: Props) {
 
   const W = 480;
   const H = height;
-  const padL = 36;
+  const padL = 44;
   const padR = 12;
   const padT = 12;
   const padB = 28;
   const plotW = W - padL - padR;
   const plotH = H - padT - padB;
 
-  const temps = data.map((d) => d.temperatura);
+  const valores = data.map((d) => d.valor);
   const times = data.map((d) => d.fecha.getTime());
   const tMin = Math.min(...times);
   const tMax = Math.max(...times);
-  const tempMinRaw = Math.min(...temps);
-  const tempMaxRaw = Math.max(...temps);
-  const pad = Math.max(1, (tempMaxRaw - tempMinRaw) * 0.1);
-  const yMin = Math.floor(tempMinRaw - pad);
-  const yMax = Math.ceil(tempMaxRaw + pad);
+  const valMinRaw = Math.min(...valores);
+  const valMaxRaw = Math.max(...valores);
+  const pad = Math.max(1, (valMaxRaw - valMinRaw) * 0.1);
+  const yMin = yMinFixed ?? Math.floor(valMinRaw - pad);
+  const yMax = yMaxFixed ?? Math.ceil(valMaxRaw + pad);
   const ySpan = yMax - yMin || 1;
   const tSpan = tMax - tMin || 1;
 
@@ -52,7 +62,7 @@ export function TemperatureChart({ puntos, height = 200 }: Props) {
   const y = (v: number) => padT + plotH - ((v - yMin) / ySpan) * plotH;
 
   const path = data
-    .map((d, i) => `${i === 0 ? "M" : "L"} ${x(d.fecha.getTime()).toFixed(1)} ${y(d.temperatura).toFixed(1)}`)
+    .map((d, i) => `${i === 0 ? "M" : "L"} ${x(d.fecha.getTime()).toFixed(1)} ${y(d.valor).toFixed(1)}`)
     .join(" ");
 
   const yTicks = 4;
@@ -73,9 +83,8 @@ export function TemperatureChart({ puntos, height = 200 }: Props) {
       viewBox={`0 0 ${W} ${H}`}
       className="w-full h-auto"
       role="img"
-      aria-label="Gr&aacute;fica de temperatura vs tiempo"
+      aria-label={ariaLabel}
     >
-      {/* Grilla */}
       {yLabels.map((t, i) => (
         <g key={i}>
           <line
@@ -92,12 +101,11 @@ export function TemperatureChart({ puntos, height = 200 }: Props) {
             fill="#4a6340"
             style={{ fontVariantNumeric: "tabular-nums" }}
           >
-            {t.v.toFixed(0)}°
+            {formatY(t.v)}
           </text>
         </g>
       ))}
 
-      {/* Marcas de tiempo */}
       {xTicks.map((d, i) => (
         <g key={i}>
           <line
@@ -118,25 +126,22 @@ export function TemperatureChart({ puntos, height = 200 }: Props) {
         </g>
       ))}
 
-      {/* Área bajo la curva */}
       <defs>
-        <linearGradient id="tempFill" x1="0" x2="0" y1="0" y2="1">
+        <linearGradient id="metricFill" x1="0" x2="0" y1="0" y2="1">
           <stop offset="0%" stopColor="#253621" stopOpacity="0.18" />
           <stop offset="100%" stopColor="#253621" stopOpacity="0" />
         </linearGradient>
       </defs>
       <path
         d={`${path} L ${x(times[times.length - 1]).toFixed(1)} ${padT + plotH} L ${x(times[0]).toFixed(1)} ${padT + plotH} Z`}
-        fill="url(#tempFill)"
+        fill="url(#metricFill)"
       />
 
-      {/* Línea principal */}
       <path d={path} fill="none" stroke="#253621" strokeWidth={1.75} strokeLinejoin="round" strokeLinecap="round" />
 
-      {/* Puntos */}
       {data.map((d, i) => (
         <g key={i}>
-          <circle cx={x(d.fecha.getTime())} cy={y(d.temperatura)} r={3.2} fill="#fcf9f0" stroke="#253621" strokeWidth={1.5} />
+          <circle cx={x(d.fecha.getTime())} cy={y(d.valor)} r={3.2} fill="#fcf9f0" stroke="#253621" strokeWidth={1.5} />
         </g>
       ))}
     </svg>

@@ -7,7 +7,7 @@ import Markdown from "react-markdown";
 import { getStatus } from "@/lib/estado";
 import { hoyISO, horaActual, combinarFechaHora, diasDesde } from "@/lib/fechas";
 import { HUMEDAD_NIVELES } from "@/lib/humedad";
-import type { ComposteraInfo, Message } from "@/lib/types";
+import type { ComposteraInfo, Message, Ciclo } from "@/lib/types";
 import {
   IconClipboard,
   IconChat,
@@ -23,11 +23,26 @@ import { usePhotoUpload } from "@/hooks/usePhotoUpload";
 import { useImageAnalysis } from "@/hooks/useImageAnalysis";
 import { useFotoModal } from "@/hooks/useFotoModal";
 import { useComposteras } from "@/hooks/useComposteras";
+import { useSitios } from "@/hooks/useSitios";
+import { useCiclos } from "@/hooks/useCiclos";
 
 export default function Home() {
   const [mode, setMode] = useState<"select" | "registro" | "pregunta" | "chat" | "diagnostico-historico">("select");
-  const { composteras, activas: activeComposteras } = useComposteras();
+  const { activos: sitiosActivos } = useSitios();
+  const [sitioId, setSitioId] = useState<number | null>(null);
+
+  // Auto-seleccionar sitio único si solo hay uno activo.
+  useEffect(() => {
+    if (sitioId == null && sitiosActivos.length === 1) {
+      setSitioId(sitiosActivos[0].id);
+    }
+  }, [sitiosActivos, sitioId]);
+
+  const { composteras, activas: activeComposteras } = useComposteras(sitioId);
   const [compostera, setCompostera] = useState("1");
+  const composteraIdNum = parseInt(compostera, 10) || null;
+  const { ciclos, activo: cicloActivo, refetch: refetchCiclos } = useCiclos(composteraIdNum);
+
   const [temp, setTemp] = useState("");
   const [ph, setPh] = useState("");
   const [hum, setHum] = useState("");
@@ -50,14 +65,37 @@ export default function Home() {
   const [horaRegistro, setHoraRegistro] = useState(horaActual());
   const chatEnd = useRef<HTMLDivElement>(null);
 
+  // Modal de "Iniciar ciclo" inline.
+  const [showCicloForm, setShowCicloForm] = useState(false);
+  const [ciFecha, setCiFecha] = useState(hoyISO());
+  const [ciPeso, setCiPeso] = useState("");
+  const [ciObjetivo, setCiObjetivo] = useState("");
+  const [ciSaving, setCiSaving] = useState(false);
+  const [ciError, setCiError] = useState("");
+
   useEffect(() => { chatEnd.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, loading]);
 
   const selectedInfo = composteras.find((c) => c.id === parseInt(compostera));
-  const diaActual = selectedInfo?.fecha_inicio ? diasDesde(selectedInfo.fecha_inicio.split("T")[0], fechaRegistro) : null;
+  const fechaInicioCiclo = cicloActivo?.fecha_inicio
+    ? cicloActivo.fecha_inicio.split("T")[0]
+    : selectedInfo?.fecha_inicio?.split("T")[0] ?? null;
+  const diaActual = fechaInicioCiclo ? diasDesde(fechaInicioCiclo, fechaRegistro) : null;
 
   function clearFoto() {
     photo.clear();
     analysis.reset();
+  }
+
+  function handleSitioChange(nuevoId: string) {
+    const n = nuevoId === "" ? null : parseInt(nuevoId, 10);
+    setSitioId(Number.isFinite(n) ? (n as number) : null);
+    // Al cambiar sitio, limpia selección de compostera para no dejar una que no le pertenezca.
+    setCompostera("");
+    setTemp(""); setPh(""); setHum(""); setObs("");
+    clearFoto();
+    setValidationError("");
+    setSaveStatus("");
+    setDatosGuardados(false);
   }
 
   function handleComposteraChange(nuevaId: string) {
@@ -70,6 +108,7 @@ export default function Home() {
     setValidationError("");
     setSaveStatus("");
     setDatosGuardados(false);
+    setShowCicloForm(false);
   }
 
   async function handleAnalizar() {
@@ -80,13 +119,47 @@ export default function Home() {
     }
   }
 
+  async function crearCicloInline() {
+    if (!composteraIdNum) return;
+    if (!ciFecha) { setCiError("Fecha de inicio obligatoria."); return; }
+    setCiSaving(true);
+    setCiError("");
+    try {
+      const peso = ciPeso.trim() ? Number(ciPeso) : null;
+      const res = await fetch(`/api/composteras/${composteraIdNum}/ciclos`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fecha_inicio: ciFecha,
+          peso_inicial_kg: peso != null && !Number.isNaN(peso) ? peso : null,
+          objetivo: ciObjetivo.trim() || null,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setCiError(data.error || "No se pudo crear el ciclo.");
+        setCiSaving(false);
+        return;
+      }
+      setShowCicloForm(false);
+      setCiPeso("");
+      setCiObjetivo("");
+      await refetchCiclos();
+    } catch {
+      setCiError("Error de conexión.");
+    }
+    setCiSaving(false);
+  }
+
   async function saveMedicion(estado: string, fotoUrl: string | null): Promise<boolean> {
     try {
       const res = await fetch("/api/mediciones", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          compostera: parseInt(compostera), dia: diaActual,
+          compostera: parseInt(compostera),
+          ciclo_id: cicloActivo?.id ?? null,
+          dia: diaActual,
           temperatura: parseFloat(temp), ph: parseFloat(ph), humedad: parseFloat(hum),
           observaciones: obs || null, estado, foto_url: fotoUrl,
           fecha: combinarFechaHora(fechaRegistro, horaRegistro),
@@ -115,6 +188,7 @@ export default function Home() {
           messages: msgs.map((m) => ({ role: m.role, content: m.content })),
           tipo: tipoFinal,
           compostera: tipoFinal === "diagnostico" ? parseInt(compostera) : null,
+          ciclo_id: tipoFinal === "diagnostico" ? (cicloActivo?.id ?? null) : null,
           guardar: tipoFinal === "diagnostico" ? true : !noGuardarPregunta,
         }),
       });
@@ -128,10 +202,13 @@ export default function Home() {
   }
 
   async function handleGuardar() {
+    if (!cicloActivo) {
+      setValidationError("Inicia un ciclo antes de registrar mediciones.");
+      return;
+    }
     const t = parseFloat(temp), p = parseFloat(ph), h = parseFloat(hum);
     if (isNaN(t) || isNaN(p) || isNaN(h)) return;
 
-    // Validate ranges
     if (t < 0 || t > 100) { setValidationError("Temperatura debe estar entre 0 y 100\u00b0C"); return; }
     if (p < 0 || p > 14) { setValidationError("pH debe estar entre 0 y 14"); return; }
     setValidationError("");
@@ -139,7 +216,6 @@ export default function Home() {
 
     const status = getStatus(t, p, h, diaActual);
 
-    // Upload photo first if present
     let fotoUrl: string | null = null;
     if (photo.foto) {
       try {
@@ -169,6 +245,7 @@ export default function Home() {
     const nombre = selectedInfo?.nombre ? `${selectedInfo.nombre} (#${compostera})` : `#${compostera}`;
     const nivelHum = HUMEDAD_NIVELES.find((n) => n.value === h);
     let msg = `DATOS DE COMPOSTERA ${nombre}`;
+    if (cicloActivo) msg += ` | Ciclo #${cicloActivo.id}`;
     if (diaActual) msg += ` | D\u00eda ${diaActual} del proceso`;
     msg += `\n- Temperatura: ${t}\u00b0C\n- pH: ${p}\n- Humedad: ${nivelHum ? `${nivelHum.label} (~${h}%)` : `${h}%`}`;
     if (obs.trim()) msg += `\n- Observaciones: ${obs}`;
@@ -204,8 +281,11 @@ export default function Home() {
         setDiagLoading(false);
         return;
       }
+      const etiqueta = data.ciclo_id
+        ? `Diagnóstico histórico ciclo #${data.ciclo_id} (compostera #${diagCompostera})`
+        : `Diagnóstico histórico de compostera #${diagCompostera}`;
       setMessages([
-        { role: "user", content: `Diagnóstico histórico de compostera #${diagCompostera}` },
+        { role: "user", content: etiqueta },
         { role: "assistant", content: data.reply, fotos: Array.isArray(data.fotos) ? data.fotos : [] },
       ]);
       setMode("chat");
@@ -224,19 +304,27 @@ export default function Home() {
     setDatosGuardados(false);
     setFechaRegistro(hoyISO());
     setHoraRegistro(horaActual());
+    setShowCicloForm(false);
   }
 
-  const canSubmit = temp !== "" && ph !== "" && hum !== "";
+  const canSubmit = temp !== "" && ph !== "" && hum !== "" && !!cicloActivo;
   const statusPreview =
-    canSubmit && !isNaN(parseFloat(temp)) && !isNaN(parseFloat(ph)) && !isNaN(parseFloat(hum))
+    temp !== "" && ph !== "" && hum !== "" && !isNaN(parseFloat(temp)) && !isNaN(parseFloat(ph)) && !isNaN(parseFloat(hum))
       ? getStatus(parseFloat(temp), parseFloat(ph), parseFloat(hum), diaActual)
       : null;
 
+  // Lista de composteras visibles para selectores. Si no hay API data aún, fallback legacy 1–10.
+  const composterasVisibles = activeComposteras.length > 0
+    ? activeComposteras
+    : (sitiosActivos.length === 0
+        ? Array.from({ length: 10 }, (_, i) => ({ id: i + 1, nombre: null } as ComposteraInfo))
+        : []);
+
+  const mostrarSelectorSitio = sitiosActivos.length > 1;
+
   return (
     <div className="min-h-screen bg-crema-100">
-      {/* Header con foto de la ciénega de Bojay — altura acotada para no empujar las acciones */}
       <header className="relative overflow-hidden text-white h-[34vh] min-h-[180px] max-h-[240px]">
-        {/* Imagen de fondo optimizada por next/image */}
         <NextImage
           src="/bojay.jpg"
           alt="Ciénega de San Francisco Bojay"
@@ -245,7 +333,6 @@ export default function Home() {
           sizes="(max-width: 480px) 100vw, 480px"
           className="object-cover"
         />
-        {/* Overlay oscuro para asegurar contraste del texto */}
         <div className="absolute inset-0 bg-gradient-to-b from-verde-950/70 via-verde-900/55 to-verde-950/85" />
 
         <div className="relative z-10 h-full max-w-[480px] mx-auto px-5 py-4 flex flex-col justify-between">
@@ -371,19 +458,54 @@ export default function Home() {
                 <h2 className="text-[15px] font-semibold text-verde-900">Registro de monitoreo</h2>
               </div>
 
+              {mostrarSelectorSitio && (
+                <div className="mb-4">
+                  <label className="input-label">Sitio</label>
+                  <select value={sitioId ?? ""} onChange={(e) => handleSitioChange(e.target.value)} className="input-field">
+                    <option value="">— Todos —</option>
+                    {sitiosActivos.map((s) => (
+                      <option key={s.id} value={s.id}>{s.nombre}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               <div className="mb-4">
                 <label className="input-label">Compostera</label>
                 <select value={compostera} onChange={(e) => handleComposteraChange(e.target.value)} className="input-field">
-                  {(activeComposteras.length > 0
-                    ? activeComposteras
-                    : Array.from({ length: 10 }, (_, i) => ({ id: i + 1, nombre: null } as ComposteraInfo))
-                  ).map((c) => (
+                  {composterasVisibles.length === 0 && (
+                    <option value="">— Sin composteras en este sitio —</option>
+                  )}
+                  {composterasVisibles.map((c) => (
                     <option key={c.id} value={c.id}>
                       #{c.id}{c.nombre ? ` \u2014 ${c.nombre}` : ""}
                     </option>
                   ))}
                 </select>
               </div>
+
+              {/* Tarjeta de ciclo activo o "Iniciar ciclo" */}
+              {composteraIdNum != null && (
+                <CicloCard
+                  cicloActivo={cicloActivo}
+                  ciclos={ciclos}
+                  showForm={showCicloForm}
+                  onIniciar={() => {
+                    setCiFecha(hoyISO());
+                    setCiPeso("");
+                    setCiObjetivo("");
+                    setCiError("");
+                    setShowCicloForm(true);
+                  }}
+                  onCancelForm={() => setShowCicloForm(false)}
+                  fecha={ciFecha} setFecha={setCiFecha}
+                  peso={ciPeso} setPeso={setCiPeso}
+                  objetivo={ciObjetivo} setObjetivo={setCiObjetivo}
+                  error={ciError}
+                  saving={ciSaving}
+                  onSubmit={crearCicloInline}
+                />
+              )}
 
               <div className="mb-4">
                 <div className="grid grid-cols-2 gap-3">
@@ -758,6 +880,101 @@ export default function Home() {
       </main>
 
       <FotoModal url={fotoModal.url} onClose={fotoModal.close} />
+    </div>
+  );
+}
+
+function CicloCard({
+  cicloActivo, ciclos, showForm,
+  onIniciar, onCancelForm,
+  fecha, setFecha, peso, setPeso, objetivo, setObjetivo,
+  error, saving, onSubmit,
+}: {
+  cicloActivo: Ciclo | null;
+  ciclos: Ciclo[];
+  showForm: boolean;
+  onIniciar: () => void;
+  onCancelForm: () => void;
+  fecha: string; setFecha: (v: string) => void;
+  peso: string; setPeso: (v: string) => void;
+  objetivo: string; setObjetivo: (v: string) => void;
+  error: string;
+  saving: boolean;
+  onSubmit: () => void;
+}) {
+  if (cicloActivo) {
+    const inicio = cicloActivo.fecha_inicio.split("T")[0];
+    const dias = diasDesde(inicio, hoyISO());
+    return (
+      <div className="mb-4 rounded-xl p-3 bg-verde-50/70 border border-verde-200/60">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <div className="text-[11px] font-semibold text-verde-600 uppercase tracking-wider">
+              Ciclo activo
+            </div>
+            <div className="text-[13px] font-semibold text-verde-900">
+              {cicloActivo.nombre || `Ciclo #${cicloActivo.id}`} — inicio {inicio}
+            </div>
+          </div>
+          {dias != null && (
+            <span className="text-[11px] font-medium text-verde-700 bg-white px-2 py-0.5 rounded-full border border-verde-200">
+              Día {dias}
+            </span>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (showForm) {
+    return (
+      <div className="mb-4 rounded-xl p-3 bg-amber-50/60 border border-amber-200">
+        <div className="text-[13px] font-semibold text-tierra-700 mb-3">
+          Iniciar ciclo en esta compostera
+        </div>
+        <div className="grid grid-cols-2 gap-2 mb-2">
+          <div>
+            <label className="input-label">Fecha de inicio</label>
+            <input type="date" value={fecha} max={hoyISO()} onChange={(e) => setFecha(e.target.value)} className="input-field" />
+          </div>
+          <div>
+            <label className="input-label">Peso inicial (kg)</label>
+            <input type="number" inputMode="decimal" min="0" step="0.1" value={peso} onChange={(e) => setPeso(e.target.value)} className="input-field" />
+          </div>
+        </div>
+        <div className="mb-3">
+          <label className="input-label">Objetivo (opcional)</label>
+          <input type="text" value={objetivo} onChange={(e) => setObjetivo(e.target.value)} className="input-field" />
+        </div>
+        {error && (
+          <div className="mb-2 px-3 py-2 rounded-xl text-[12px] font-semibold text-red-700 bg-red-50 ring-1 ring-red-200">{error}</div>
+        )}
+        <div className="flex gap-2">
+          <button onClick={onSubmit} disabled={saving} className="flex-1 px-3 py-2 rounded-xl bg-verde-700 text-white text-[13px] font-semibold">
+            {saving ? "Creando..." : "Crear y usar"}
+          </button>
+          <button onClick={onCancelForm} className="px-3 py-2 rounded-xl text-[13px] font-semibold text-gray-500 bg-white border border-gray-200">
+            Cancelar
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const ultimoCerrado = ciclos.find((c) => c.estado !== "activo");
+  return (
+    <div className="mb-4 rounded-xl p-3 bg-amber-50/60 border border-amber-200">
+      <div className="text-[13px] font-semibold text-tierra-700 mb-1">
+        Esta compostera no tiene ciclo activo
+      </div>
+      <div className="text-[12px] text-gray-500 mb-3 leading-snug">
+        {ultimoCerrado
+          ? `El último ciclo se cerró el ${(ultimoCerrado.fecha_fin ?? ultimoCerrado.fecha_inicio).split("T")[0]}. Inicia uno nuevo para registrar mediciones.`
+          : "Inicia un ciclo para comenzar a registrar mediciones."}
+      </div>
+      <button onClick={onIniciar} className="w-full px-3 py-2.5 rounded-xl bg-verde-700 text-white text-[13px] font-semibold shadow-card active:scale-[0.98]">
+        Iniciar ciclo
+      </button>
     </div>
   );
 }

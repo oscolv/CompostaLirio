@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SYSTEM_PROMPT, DIAGNOSTICO_HISTORICO_PROMPT } from "@/lib/prompt";
-import { ensureTable, insertConsulta, getMedicionesExport } from "@/lib/db";
-import { buildResumenHistorico } from "@/lib/diagnostico";
+import {
+  ensureSchemaV2,
+  insertConsultaConCiclo,
+  getMedicionesExport,
+  getMedicionesExportByCiclo,
+  getCicloActivo,
+  getCicloById,
+} from "@/lib/db";
+import { buildResumenHistorico, buildResumenHistoricoPorCiclo } from "@/lib/diagnostico";
 
 type MedicionRow = {
   id: number;
@@ -41,30 +48,52 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "DEEPSEEK_API_KEY no configurada." }, { status: 500 });
   }
 
-  let compostera: number;
+  let compostera: number | null = null;
+  let cicloId: number | null = null;
   try {
     const body = await req.json();
-    compostera = body.compostera;
-    if (!compostera || typeof compostera !== "number") {
-      return NextResponse.json({ error: "Falta el número de compostera." }, { status: 400 });
+    cicloId = typeof body.ciclo_id === "number" ? body.ciclo_id : null;
+    compostera = typeof body.compostera === "number" ? body.compostera : null;
+    if (!cicloId && !compostera) {
+      return NextResponse.json(
+        { error: "Debes indicar ciclo_id o compostera." },
+        { status: 400 },
+      );
     }
   } catch {
     return NextResponse.json({ error: "Request body inválido." }, { status: 400 });
   }
 
   try {
-    await ensureTable();
+    await ensureSchemaV2();
 
-    const resumen = await buildResumenHistorico(compostera);
+    // Si no viene ciclo_id explícito, intentamos usar el ciclo activo
+    // de la compostera. Si no existe, hacemos fallback al histórico total.
+    if (!cicloId && compostera) {
+      const activo = await getCicloActivo(compostera);
+      if (activo) cicloId = activo.id as number;
+    }
+
+    let resumen: string | null = null;
+    let composteraEfectiva: number | null = compostera;
+    if (cicloId) {
+      const ciclo = await getCicloById(cicloId);
+      if (!ciclo) {
+        return NextResponse.json({ error: `Ciclo #${cicloId} no encontrado.` }, { status: 404 });
+      }
+      composteraEfectiva = ciclo.compostera_id as number;
+      resumen = await buildResumenHistoricoPorCiclo(cicloId);
+    } else if (compostera) {
+      resumen = await buildResumenHistorico(compostera);
+    }
+
     if (!resumen) {
-      return NextResponse.json(
-        { error: `No hay registros para la compostera #${compostera}.` },
-        { status: 404 },
-      );
+      const where = cicloId ? `ciclo #${cicloId}` : `compostera #${compostera}`;
+      return NextResponse.json({ error: `No hay registros para el ${where}.` }, { status: 404 });
     }
 
     const systemContent = SYSTEM_PROMPT + "\n\n" + DIAGNOSTICO_HISTORICO_PROMPT;
-    const userMessage = resumen + "\n\nDame tu diagnóstico integral de esta compostera.";
+    const userMessage = resumen + "\n\nDame tu diagnóstico integral.";
 
     const res = await fetch("https://api.deepseek.com/chat/completions", {
       method: "POST",
@@ -91,22 +120,29 @@ export async function POST(req: NextRequest) {
     const data = await res.json();
     const reply = data.choices?.[0]?.message?.content || "No pude generar respuesta.";
 
-    // Log to consultas
     try {
-      await insertConsulta({
+      const label = cicloId
+        ? `Diagnóstico histórico ciclo #${cicloId}`
+        : `Diagnóstico histórico compostera #${composteraEfectiva}`;
+      await insertConsultaConCiclo({
         tipo: "diagnostico-historico",
-        compostera,
-        pregunta: `Diagnóstico histórico compostera #${compostera}`,
+        compostera: composteraEfectiva,
+        ciclo_id: cicloId,
+        pregunta: label,
         respuesta: reply,
       });
     } catch (e) {
       console.error("[diagnostico] Failed to log consulta:", e);
     }
 
-    // Últimas 3 fotos (orden cronológico ascendente para narrar la trayectoria)
+    // Últimas 3 fotos del mismo ámbito (ciclo preferente, compostera legacy)
     let fotos: { url: string; fecha: string; dia: number | null }[] = [];
     try {
-      const rows = (await getMedicionesExport(compostera)) as MedicionRow[];
+      const rows = (cicloId
+        ? await getMedicionesExportByCiclo(cicloId)
+        : composteraEfectiva
+          ? await getMedicionesExport(composteraEfectiva)
+          : []) as MedicionRow[];
       fotos = rows
         .filter((r) => r.foto_url)
         .slice(-3)
@@ -115,7 +151,7 @@ export async function POST(req: NextRequest) {
       console.error("[diagnostico] fotos:", e);
     }
 
-    return NextResponse.json({ reply, resumen, fotos });
+    return NextResponse.json({ reply, resumen, fotos, ciclo_id: cicloId });
   } catch (e) {
     console.error("[diagnostico] Error:", e);
     return NextResponse.json(

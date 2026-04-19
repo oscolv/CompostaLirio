@@ -14,6 +14,9 @@ import { AnalisisBadge } from "@/components/ui/AnalisisBadge";
 import { useImageAnalysis } from "@/hooks/useImageAnalysis";
 import { useFotoModal } from "@/hooks/useFotoModal";
 import { MetricChart } from "@/components/charts/MetricChart";
+import { useSitios } from "@/hooks/useSitios";
+import { useComposteras } from "@/hooks/useComposteras";
+import { useCiclos } from "@/hooks/useCiclos";
 
 type MetricaKey = "temperatura" | "ph" | "humedad";
 
@@ -26,6 +29,12 @@ const METRICAS: { key: MetricaKey; label: string; formatY: (v: number) => string
 export default function Historial() {
   const [mediciones, setMediciones] = useState<Medicion[]>([]);
   const [filtro, setFiltro] = useState("");
+  const [sitioFiltro, setSitioFiltro] = useState<number | null>(null);
+  const [cicloFiltro, setCicloFiltro] = useState<number | null>(null);
+  const { activos: sitiosActivos } = useSitios();
+  const { activas: composterasDelSitio } = useComposteras(sitioFiltro);
+  const composteraIdNum = filtro ? parseInt(filtro, 10) : null;
+  const { ciclos: ciclosCompostera } = useCiclos(composteraIdNum);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [expandido, setExpandido] = useState<number | null>(null);
@@ -49,7 +58,9 @@ export default function Historial() {
     setError("");
     try {
       const qs = new URLSearchParams();
-      if (filtro) qs.set("compostera", filtro);
+      if (cicloFiltro) qs.set("ciclo_id", String(cicloFiltro));
+      else if (filtro) qs.set("compostera", filtro);
+      else if (sitioFiltro) qs.set("sitio_id", String(sitioFiltro));
       qs.set("t", String(Date.now()));
       const res = await fetch(`/api/mediciones?${qs.toString()}`, { cache: "no-store" });
       if (!res.ok) throw new Error();
@@ -58,9 +69,13 @@ export default function Historial() {
       setError("No se pudo conectar a la base de datos.");
     }
     setLoading(false);
-  }, [filtro]);
+  }, [filtro, sitioFiltro, cicloFiltro]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Reset downstream filters cuando cambia el de arriba.
+  useEffect(() => { setFiltro(""); setCicloFiltro(null); }, [sitioFiltro]);
+  useEffect(() => { setCicloFiltro(null); }, [filtro]);
 
   async function handleDelete(id: number) {
     if (confirmDelete !== id) {
@@ -211,27 +226,38 @@ export default function Historial() {
   const [metrica, setMetrica] = useState<MetricaKey>("temperatura");
   const fotoModal = useFotoModal();
 
-  useEffect(() => { setShowChart(false); }, [filtro]);
+  useEffect(() => { setShowChart(false); }, [filtro, cicloFiltro]);
 
-  const chartPoints = filtro
+  const chartPoints = (filtro || cicloFiltro)
     ? mediciones
         .filter((m) => typeof m[metrica] === "number" && !isNaN(m[metrica] as number))
         .map((m) => ({ fecha: new Date(m.created_at), valor: Number(m[metrica]) }))
     : [];
-  const canShowChart = !!filtro && chartPoints.length > 0;
+  const canShowChart = (!!filtro || !!cicloFiltro) && chartPoints.length > 0;
   const metricaActiva = METRICAS.find((m) => m.key === metrica) ?? METRICAS[0];
+  const chartTituloSufijo = cicloFiltro
+    ? `Ciclo #${cicloFiltro}`
+    : filtro ? `Compostera #${filtro}` : "";
 
   async function downloadCSV() {
     setDownloading(true);
     try {
-      const params = filtro ? `?compostera=${filtro}` : "";
-      const res = await fetch(`/api/mediciones/export${params}`);
+      let query = "";
+      let nombreArchivo = "";
+      if (cicloFiltro) {
+        query = `?ciclo_id=${cicloFiltro}`;
+        nombreArchivo = `-ciclo-${cicloFiltro}`;
+      } else if (filtro) {
+        query = `?compostera=${filtro}`;
+        nombreArchivo = `-compostera-${filtro}`;
+      }
+      const res = await fetch(`/api/mediciones/export${query}`);
       if (!res.ok) throw new Error();
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `composta-lirio-mediciones${filtro ? `-compostera-${filtro}` : ""}.csv`;
+      a.download = `composta-lirio-mediciones${nombreArchivo}.csv`;
       a.click();
       URL.revokeObjectURL(url);
     } catch { /* ignore */ }
@@ -266,25 +292,59 @@ export default function Historial() {
       </header>
 
       <main className="max-w-[480px] mx-auto px-4 py-5">
-        <div className="flex gap-2 mb-4">
-          <select
-            value={filtro}
-            onChange={(e) => setFiltro(e.target.value)}
-            className="input-field flex-1"
-          >
-            <option value="">Todas las composteras</option>
-            {Array.from({ length: 10 }, (_, i) => (
-              <option key={i + 1} value={i + 1}>Compostera #{i + 1}</option>
-            ))}
-          </select>
-          <button
-            onClick={downloadCSV}
-            disabled={downloading}
-            className="flex items-center gap-1.5 px-4 py-3 rounded-xl bg-verde-700 text-white text-[13px] font-semibold shadow-card transition-all active:scale-95 disabled:bg-gray-300 disabled:shadow-none"
-          >
-            <IconDownload />
-            {downloading ? "Descargando..." : "CSV"}
-          </button>
+        <div className="flex flex-col gap-2 mb-4">
+          {sitiosActivos.length > 1 && (
+            <select
+              value={sitioFiltro ?? ""}
+              onChange={(e) => setSitioFiltro(e.target.value ? parseInt(e.target.value, 10) : null)}
+              className="input-field"
+            >
+              <option value="">Todos los sitios</option>
+              {sitiosActivos.map((s) => (
+                <option key={s.id} value={s.id}>{s.nombre}</option>
+              ))}
+            </select>
+          )}
+          <div className="flex gap-2">
+            <select
+              value={filtro}
+              onChange={(e) => setFiltro(e.target.value)}
+              className="input-field flex-1"
+            >
+              <option value="">Todas las composteras</option>
+              {(composterasDelSitio.length > 0
+                ? composterasDelSitio
+                : Array.from({ length: 10 }, (_, i) => ({ id: i + 1, nombre: null } as { id: number; nombre: string | null }))
+              ).map((c) => (
+                <option key={c.id} value={c.id}>
+                  Compostera #{c.id}{c.nombre ? ` — ${c.nombre}` : ""}
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={downloadCSV}
+              disabled={downloading}
+              className="flex items-center gap-1.5 px-4 py-3 rounded-xl bg-verde-700 text-white text-[13px] font-semibold shadow-card transition-all active:scale-95 disabled:bg-gray-300 disabled:shadow-none"
+            >
+              <IconDownload />
+              {downloading ? "Descargando..." : "CSV"}
+            </button>
+          </div>
+          {filtro && ciclosCompostera.length > 0 && (
+            <select
+              value={cicloFiltro ?? ""}
+              onChange={(e) => setCicloFiltro(e.target.value ? parseInt(e.target.value, 10) : null)}
+              className="input-field"
+            >
+              <option value="">Todos los ciclos</option>
+              {ciclosCompostera.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nombre || `Ciclo #${c.id}`} — {c.fecha_inicio.split("T")[0]}
+                  {c.estado !== "activo" ? ` (${c.estado})` : ""}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
 
         {canShowChart && (
@@ -316,12 +376,12 @@ export default function Historial() {
                   })}
                 </div>
                 <div className="text-[13px] font-semibold text-verde-800 mb-2">
-                  Evoluci&oacute;n de {metricaActiva.label.toLowerCase()} Compostera #{filtro}
+                  Evoluci&oacute;n de {metricaActiva.label.toLowerCase()} {chartTituloSufijo}
                 </div>
                 <MetricChart
                   puntos={chartPoints}
                   formatY={metricaActiva.formatY}
-                  ariaLabel={`${metricaActiva.ariaLabel} compostera ${filtro}`}
+                  ariaLabel={`${metricaActiva.ariaLabel} ${chartTituloSufijo}`}
                 />
               </div>
             )}

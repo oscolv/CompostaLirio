@@ -9,6 +9,7 @@ type Consulta = {
   id: number;
   tipo: string;
   compostera: number | null;
+  ciclo_id: number | null;
   pregunta: string;
   respuesta: string | null;
   created_at: string;
@@ -184,7 +185,11 @@ export default function Consultas() {
                       <span className={`text-[11px] font-semibold uppercase tracking-wider ${
                         isDiag ? "text-verde-600" : "text-tierra-500"
                       }`}>
-                        {isDiag ? `Diagn\u00f3stico${c.compostera ? ` #${c.compostera}` : ""}` : "Pregunta libre"}
+                        {isDiag
+                          ? c.ciclo_id
+                            ? `Diagn\u00f3stico ciclo #${c.ciclo_id}${c.compostera ? ` (comp #${c.compostera})` : ""}`
+                            : `Diagn\u00f3stico${c.compostera ? ` #${c.compostera}` : ""}`
+                          : "Pregunta libre"}
                       </span>
                       <span className="text-[11px] text-gray-400 flex-shrink-0">
                         {fecha.toLocaleDateString("es-MX", { day: "numeric", month: "short" })}

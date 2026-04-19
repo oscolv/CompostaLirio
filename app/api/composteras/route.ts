@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ensureTable, getComposteras, upsertCompostera } from "@/lib/db";
+import { ensureSchemaV2, getComposteras, upsertCompostera } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export async function GET() {
   try {
-    await ensureTable();
+    await ensureSchemaV2();
     const rows = await getComposteras();
     return NextResponse.json(rows);
   } catch (e: unknown) {
@@ -17,7 +17,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    await ensureTable();
+    await ensureSchemaV2();
     const body = await req.json();
     const { composteras } = body as {
       composteras: {
@@ -26,6 +26,10 @@ export async function POST(req: NextRequest) {
         fecha_inicio: string | null;
         activa: boolean;
         masa_inicial: number | null;
+        sitio_id?: number | null;
+        tipo?: string | null;
+        capacidad_kg?: number | null;
+        estado?: "activa" | "inactiva" | "retirada";
       }[];
     };
 

@@ -116,6 +116,134 @@ export async function ensureTable() {
   `;
 }
 
+// =====================================================================
+// ensureSchemaV2: estructura jerárquica Sitio → Compostera → Ciclo → Medición
+// Aditiva e idempotente. Ejecuta el backfill de datos legacy la primera vez.
+// Cada endpoint nuevo (sitios, ciclos, mediciones con ciclo, diagnóstico
+// por ciclo) la invoca. El patrón imita a ensureTable() existente.
+// =====================================================================
+export async function ensureSchemaV2() {
+  await ensureTable();
+  const sql = getSQL();
+
+  // 1) sitios
+  await sql`
+    CREATE TABLE IF NOT EXISTS sitios (
+      id          SERIAL PRIMARY KEY,
+      nombre      TEXT NOT NULL UNIQUE,
+      descripcion TEXT,
+      ubicacion   TEXT,
+      activo      BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+
+  // 2) composteras: columnas nuevas
+  await sql`ALTER TABLE composteras ADD COLUMN IF NOT EXISTS sitio_id     INTEGER REFERENCES sitios(id) ON DELETE RESTRICT`;
+  await sql`ALTER TABLE composteras ADD COLUMN IF NOT EXISTS tipo         TEXT`;
+  await sql`ALTER TABLE composteras ADD COLUMN IF NOT EXISTS capacidad_kg REAL`;
+  await sql`ALTER TABLE composteras ADD COLUMN IF NOT EXISTS estado       TEXT NOT NULL DEFAULT 'activa'`;
+  await sql`ALTER TABLE composteras ADD COLUMN IF NOT EXISTS created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()`;
+  await sql`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'composteras_estado_check') THEN
+        ALTER TABLE composteras
+          ADD CONSTRAINT composteras_estado_check
+          CHECK (estado IN ('activa','inactiva','retirada'));
+      END IF;
+    END$$
+  `;
+  await sql`CREATE INDEX IF NOT EXISTS idx_composteras_sitio ON composteras(sitio_id)`;
+
+  // 3) ciclos
+  await sql`
+    CREATE TABLE IF NOT EXISTS ciclos (
+      id                       SERIAL PRIMARY KEY,
+      compostera_id            INTEGER NOT NULL REFERENCES composteras(id) ON DELETE RESTRICT,
+      nombre                   TEXT,
+      fecha_inicio             DATE NOT NULL,
+      fecha_fin                DATE,
+      estado                   TEXT NOT NULL DEFAULT 'activo'
+                                 CHECK (estado IN ('activo','cerrado','descartado')),
+      formulacion_id           INTEGER REFERENCES formulaciones(id) ON DELETE RESTRICT,
+      peso_inicial_kg          REAL,
+      objetivo                 TEXT,
+      observaciones_generales  TEXT,
+      created_at               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CHECK (fecha_fin IS NULL OR fecha_fin >= fecha_inicio)
+    )
+  `;
+  await sql`CREATE INDEX IF NOT EXISTS idx_ciclos_compostera ON ciclos(compostera_id)`;
+  await sql`
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_ciclos_un_activo_por_compostera
+      ON ciclos(compostera_id) WHERE estado = 'activo'
+  `;
+
+  // 4) mediciones.ciclo_id
+  await sql`ALTER TABLE mediciones ADD COLUMN IF NOT EXISTS ciclo_id INTEGER REFERENCES ciclos(id) ON DELETE RESTRICT`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_mediciones_ciclo ON mediciones(ciclo_id)`;
+
+  // 5) consultas.ciclo_id
+  await sql`ALTER TABLE consultas ADD COLUMN IF NOT EXISTS ciclo_id INTEGER REFERENCES ciclos(id) ON DELETE SET NULL`;
+
+  // ---------------------------------------------------------------
+  // BACKFILL (sólo ejecuta lo que falte; seguro en re-ejecución)
+  // ---------------------------------------------------------------
+  await sql`
+    INSERT INTO sitios (nombre, descripcion, ubicacion)
+    VALUES ('San Francisco Bojay', 'Sitio inicial (seed de migración v2).', 'Bojay, Hidalgo')
+    ON CONFLICT (nombre) DO NOTHING
+  `;
+
+  await sql`
+    UPDATE composteras
+    SET sitio_id = (SELECT id FROM sitios WHERE nombre = 'San Francisco Bojay')
+    WHERE sitio_id IS NULL
+  `;
+
+  await sql`
+    WITH fuentes AS (
+      SELECT
+        c.id AS compostera_id,
+        COALESCE(
+          c.fecha_inicio,
+          (SELECT MIN(m.created_at)::date FROM mediciones m WHERE m.compostera = c.id),
+          CURRENT_DATE
+        ) AS fecha_inicio,
+        c.masa_inicial,
+        (SELECT cf.formulacion_id
+           FROM compostera_formulaciones cf
+          WHERE cf.compostera_id = c.id AND cf.es_actual = TRUE
+          LIMIT 1) AS formulacion_id
+      FROM composteras c
+      WHERE NOT EXISTS (SELECT 1 FROM ciclos ci WHERE ci.compostera_id = c.id)
+        AND (
+          c.fecha_inicio IS NOT NULL
+          OR EXISTS (SELECT 1 FROM mediciones m WHERE m.compostera = c.id)
+        )
+    )
+    INSERT INTO ciclos (
+      compostera_id, nombre, fecha_inicio, estado,
+      formulacion_id, peso_inicial_kg, observaciones_generales
+    )
+    SELECT
+      compostera_id, 'Ciclo 1', fecha_inicio, 'activo',
+      formulacion_id, masa_inicial,
+      'Ciclo creado automáticamente durante la migración a modelo Sitio→Compostera→Ciclo.'
+    FROM fuentes
+  `;
+
+  await sql`
+    UPDATE mediciones m
+    SET ciclo_id = ci.id
+    FROM ciclos ci
+    WHERE ci.compostera_id = m.compostera
+      AND ci.estado = 'activo'
+      AND m.ciclo_id IS NULL
+  `;
+}
+
 export async function ensureAnalisisTable() {
   const sql = getSQL();
   await sql`
@@ -154,6 +282,7 @@ export async function insertAnalisis(data: {
 
 export async function insertMedicion(data: {
   compostera: number;
+  ciclo_id?: number | null;
   dia: number | null;
   temperatura: number;
   ph: number;
@@ -164,17 +293,18 @@ export async function insertMedicion(data: {
   created_at?: string | null;
 }) {
   const sql = getSQL();
+  const ciclo_id = data.ciclo_id ?? null;
   if (data.created_at) {
     const result = await sql`
-      INSERT INTO mediciones (compostera, dia, temperatura, ph, humedad, observaciones, estado, foto_url, created_at)
-      VALUES (${data.compostera}, ${data.dia}, ${data.temperatura}, ${data.ph}, ${data.humedad}, ${data.observaciones}, ${data.estado}, ${data.foto_url}, ${data.created_at})
+      INSERT INTO mediciones (compostera, ciclo_id, dia, temperatura, ph, humedad, observaciones, estado, foto_url, created_at)
+      VALUES (${data.compostera}, ${ciclo_id}, ${data.dia}, ${data.temperatura}, ${data.ph}, ${data.humedad}, ${data.observaciones}, ${data.estado}, ${data.foto_url}, ${data.created_at})
       RETURNING id, created_at
     `;
     return result[0];
   }
   const result = await sql`
-    INSERT INTO mediciones (compostera, dia, temperatura, ph, humedad, observaciones, estado, foto_url)
-    VALUES (${data.compostera}, ${data.dia}, ${data.temperatura}, ${data.ph}, ${data.humedad}, ${data.observaciones}, ${data.estado}, ${data.foto_url})
+    INSERT INTO mediciones (compostera, ciclo_id, dia, temperatura, ph, humedad, observaciones, estado, foto_url)
+    VALUES (${data.compostera}, ${ciclo_id}, ${data.dia}, ${data.temperatura}, ${data.ph}, ${data.humedad}, ${data.observaciones}, ${data.estado}, ${data.foto_url})
     RETURNING id, created_at
   `;
   return result[0];
@@ -239,6 +369,7 @@ export async function getMedicionById(id: number) {
 
 export async function updateMedicion(id: number, data: {
   compostera: number;
+  ciclo_id?: number | null;
   dia: number | null;
   temperatura: number;
   ph: number;
@@ -251,6 +382,11 @@ export async function updateMedicion(id: number, data: {
   const sql = getSQL();
   const setFoto = data.foto_url !== undefined;
   const setCreated = !!data.created_at;
+
+  // Ciclo se actualiza en una sentencia aparte para no multiplicar ramas.
+  if (data.ciclo_id !== undefined) {
+    await sql`UPDATE mediciones SET ciclo_id = ${data.ciclo_id} WHERE id = ${id}`;
+  }
   if (setFoto && setCreated) {
     await sql`
       UPDATE mediciones SET
@@ -332,17 +468,35 @@ export async function upsertCompostera(data: {
   fecha_inicio: string | null;
   activa: boolean;
   masa_inicial: number | null;
+  sitio_id?: number | null;
+  tipo?: string | null;
+  capacidad_kg?: number | null;
+  estado?: "activa" | "inactiva" | "retirada";
 }) {
   const sql = getSQL();
+  const sitio_id = data.sitio_id ?? null;
+  const tipo = data.tipo ?? null;
+  const capacidad_kg = data.capacidad_kg ?? null;
+  const estado = data.estado ?? (data.activa ? "activa" : "inactiva");
   await sql`
-    INSERT INTO composteras (id, nombre, fecha_inicio, activa, masa_inicial)
-    VALUES (${data.id}, ${data.nombre}, ${data.fecha_inicio}, ${data.activa}, ${data.masa_inicial})
+    INSERT INTO composteras (id, nombre, fecha_inicio, activa, masa_inicial, sitio_id, tipo, capacidad_kg, estado)
+    VALUES (${data.id}, ${data.nombre}, ${data.fecha_inicio}, ${data.activa}, ${data.masa_inicial},
+            ${sitio_id}, ${tipo}, ${capacidad_kg}, ${estado})
     ON CONFLICT (id) DO UPDATE SET
       nombre = ${data.nombre},
       fecha_inicio = ${data.fecha_inicio},
       activa = ${data.activa},
-      masa_inicial = ${data.masa_inicial}
+      masa_inicial = ${data.masa_inicial},
+      sitio_id = COALESCE(${sitio_id}, composteras.sitio_id),
+      tipo = COALESCE(${tipo}, composteras.tipo),
+      capacidad_kg = COALESCE(${capacidad_kg}, composteras.capacidad_kg),
+      estado = ${estado}
   `;
+}
+
+export async function getComposterasBySitio(sitio_id: number) {
+  const sql = getSQL();
+  return sql`SELECT * FROM composteras WHERE sitio_id = ${sitio_id} ORDER BY id`;
 }
 
 /* ============================================================
@@ -568,3 +722,244 @@ export async function getFormulacionActual(compostera_id: number) {
   `;
   return rows[0] || null;
 }
+
+/* ============================================================
+ * SITIOS
+ * ============================================================ */
+
+export async function getSitios(soloActivos = false) {
+  const sql = getSQL();
+  if (soloActivos) {
+    return sql`SELECT * FROM sitios WHERE activo = TRUE ORDER BY nombre`;
+  }
+  return sql`SELECT * FROM sitios ORDER BY nombre`;
+}
+
+export async function getSitioById(id: number) {
+  const sql = getSQL();
+  const rows = await sql`SELECT * FROM sitios WHERE id = ${id}`;
+  return rows[0] || null;
+}
+
+export async function createSitio(data: {
+  nombre: string;
+  descripcion: string | null;
+  ubicacion: string | null;
+  activo?: boolean;
+}) {
+  const sql = getSQL();
+  const rows = await sql`
+    INSERT INTO sitios (nombre, descripcion, ubicacion, activo)
+    VALUES (${data.nombre}, ${data.descripcion}, ${data.ubicacion}, ${data.activo ?? true})
+    RETURNING *
+  `;
+  return rows[0];
+}
+
+export async function updateSitio(id: number, data: {
+  nombre: string;
+  descripcion: string | null;
+  ubicacion: string | null;
+  activo?: boolean;
+}) {
+  const sql = getSQL();
+  const rows = await sql`
+    UPDATE sitios SET
+      nombre      = ${data.nombre},
+      descripcion = ${data.descripcion},
+      ubicacion   = ${data.ubicacion},
+      activo      = ${data.activo ?? true}
+    WHERE id = ${id}
+    RETURNING *
+  `;
+  return rows[0] || null;
+}
+
+// Soft-delete: marca como inactivo. Nunca borramos sitios porque composteras
+// y ciclos referencian FKs con ON DELETE RESTRICT.
+export async function deactivateSitio(id: number) {
+  const sql = getSQL();
+  await sql`UPDATE sitios SET activo = FALSE WHERE id = ${id}`;
+}
+
+/* ============================================================
+ * CICLOS
+ * ============================================================ */
+
+export async function getCiclosByCompostera(compostera_id: number) {
+  const sql = getSQL();
+  return sql`
+    SELECT * FROM ciclos
+    WHERE compostera_id = ${compostera_id}
+    ORDER BY fecha_inicio DESC, created_at DESC
+  `;
+}
+
+export async function getCiclosBySitio(sitio_id: number) {
+  const sql = getSQL();
+  return sql`
+    SELECT ci.*
+    FROM ciclos ci
+    JOIN composteras c ON c.id = ci.compostera_id
+    WHERE c.sitio_id = ${sitio_id}
+    ORDER BY ci.fecha_inicio DESC, ci.created_at DESC
+  `;
+}
+
+export async function getCicloById(id: number) {
+  const sql = getSQL();
+  const rows = await sql`SELECT * FROM ciclos WHERE id = ${id}`;
+  return rows[0] || null;
+}
+
+export async function getCicloActivo(compostera_id: number) {
+  const sql = getSQL();
+  const rows = await sql`
+    SELECT * FROM ciclos
+    WHERE compostera_id = ${compostera_id} AND estado = 'activo'
+    LIMIT 1
+  `;
+  return rows[0] || null;
+}
+
+export async function createCiclo(data: {
+  compostera_id: number;
+  nombre: string | null;
+  fecha_inicio: string;
+  formulacion_id?: number | null;
+  peso_inicial_kg?: number | null;
+  objetivo: string | null;
+  observaciones_generales: string | null;
+}) {
+  const sql = getSQL();
+
+  // Garantiza que la compostera exista (FK). El usuario puede iniciar un
+  // ciclo para una compostera cuyo registro aún no se haya guardado vía UI.
+  await sql`
+    INSERT INTO composteras (id) VALUES (${data.compostera_id})
+    ON CONFLICT (id) DO NOTHING
+  `;
+
+  const rows = await sql`
+    INSERT INTO ciclos (
+      compostera_id, nombre, fecha_inicio, estado,
+      formulacion_id, peso_inicial_kg, objetivo, observaciones_generales
+    ) VALUES (
+      ${data.compostera_id},
+      ${data.nombre},
+      ${data.fecha_inicio}::date,
+      'activo',
+      ${data.formulacion_id ?? null},
+      ${data.peso_inicial_kg ?? null},
+      ${data.objetivo},
+      ${data.observaciones_generales}
+    )
+    RETURNING *
+  `;
+  return rows[0];
+}
+
+export async function updateCiclo(id: number, data: {
+  nombre: string | null;
+  formulacion_id?: number | null;
+  peso_inicial_kg?: number | null;
+  objetivo: string | null;
+  observaciones_generales: string | null;
+}) {
+  const sql = getSQL();
+  const rows = await sql`
+    UPDATE ciclos SET
+      nombre                  = ${data.nombre},
+      formulacion_id          = ${data.formulacion_id ?? null},
+      peso_inicial_kg         = ${data.peso_inicial_kg ?? null},
+      objetivo                = ${data.objetivo},
+      observaciones_generales = ${data.observaciones_generales}
+    WHERE id = ${id}
+    RETURNING *
+  `;
+  return rows[0] || null;
+}
+
+export async function closeCiclo(id: number, fecha_fin?: string | null) {
+  const sql = getSQL();
+  const rows = fecha_fin
+    ? await sql`
+        UPDATE ciclos
+        SET estado = 'cerrado', fecha_fin = ${fecha_fin}::date
+        WHERE id = ${id}
+        RETURNING *
+      `
+    : await sql`
+        UPDATE ciclos
+        SET estado = 'cerrado', fecha_fin = CURRENT_DATE
+        WHERE id = ${id}
+        RETURNING *
+      `;
+  return rows[0] || null;
+}
+
+export async function discardCiclo(id: number) {
+  const sql = getSQL();
+  const rows = await sql`
+    UPDATE ciclos SET estado = 'descartado'
+    WHERE id = ${id}
+    RETURNING *
+  `;
+  return rows[0] || null;
+}
+
+/* ============================================================
+ * MEDICIONES POR CICLO
+ * ============================================================ */
+
+export async function getMedicionesByCiclo(ciclo_id: number) {
+  const sql = getSQL();
+  return sql`
+    SELECT * FROM mediciones
+    WHERE ciclo_id = ${ciclo_id}
+    ORDER BY created_at DESC
+    LIMIT 100
+  `;
+}
+
+export async function getMedicionesExportByCiclo(ciclo_id: number) {
+  const sql = getSQL();
+  return sql`
+    SELECT * FROM mediciones
+    WHERE ciclo_id = ${ciclo_id}
+    ORDER BY created_at ASC
+  `;
+}
+
+export async function getMedicionesBySitio(sitio_id: number) {
+  const sql = getSQL();
+  return sql`
+    SELECT m.*
+    FROM mediciones m
+    JOIN composteras c ON c.id = m.compostera
+    WHERE c.sitio_id = ${sitio_id}
+    ORDER BY m.created_at DESC
+    LIMIT 100
+  `;
+}
+
+/* ============================================================
+ * CONSULTAS con ciclo_id
+ * ============================================================ */
+
+export async function insertConsultaConCiclo(data: {
+  tipo: string;
+  compostera: number | null;
+  ciclo_id: number | null;
+  pregunta: string;
+  respuesta: string | null;
+}) {
+  const sql = getSQL();
+  const result = await sql`
+    INSERT INTO consultas (tipo, compostera, ciclo_id, pregunta, respuesta)
+    VALUES (${data.tipo}, ${data.compostera}, ${data.ciclo_id}, ${data.pregunta}, ${data.respuesta})
+    RETURNING id
+  `;
+  return result[0];
+}
+

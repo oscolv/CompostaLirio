@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SYSTEM_PROMPT } from "@/lib/prompt";
-import { ensureTable, insertConsulta, getMediciones } from "@/lib/db";
+import {
+  ensureSchemaV2,
+  insertConsultaConCiclo,
+  getMediciones,
+  getMedicionesByCiclo,
+  getCicloActivo,
+} from "@/lib/db";
 
 // Rate limiting: 30 requests per hour per IP
 const RATE_LIMIT = 30;
-const RATE_WINDOW = 60 * 60 * 1000; // 1 hour
+const RATE_WINDOW = 60 * 60 * 1000;
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 
 function checkRateLimit(ip: string): boolean {
@@ -20,7 +26,6 @@ function checkRateLimit(ip: string): boolean {
 }
 
 export async function POST(req: NextRequest) {
-  // Rate limit check
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
   if (!checkRateLimit(ip)) {
     return NextResponse.json(
@@ -40,12 +45,14 @@ export async function POST(req: NextRequest) {
 
   let messages;
   let compostera: number | null = null;
+  let cicloId: number | null = null;
   let tipo = "pregunta";
   let guardar = true;
   try {
     const body = await req.json();
     messages = body.messages;
     compostera = body.compostera ?? null;
+    cicloId = typeof body.ciclo_id === "number" ? body.ciclo_id : null;
     tipo = body.tipo ?? "pregunta";
     guardar = body.guardar !== false;
   } catch (e) {
@@ -54,18 +61,29 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    // For diagnostics, inject recent history + trend summary
+    // Para diagnóstico: inyectamos historial reciente. Preferimos ciclo > compostera.
     let historyContext = "";
-    if (tipo === "diagnostico" && compostera) {
+    if (tipo === "diagnostico" && (cicloId || compostera)) {
       try {
-        await ensureTable();
-        const recent = await getMediciones(compostera);
+        await ensureSchemaV2();
+
+        // Resolver ciclo efectivo
+        if (!cicloId && compostera) {
+          const activo = await getCicloActivo(compostera);
+          if (activo) cicloId = activo.id as number;
+        }
+
+        const recent = cicloId
+          ? await getMedicionesByCiclo(cicloId)
+          : await getMediciones(compostera ?? undefined);
         const last5 = recent.slice(0, 5);
         if (last5.length > 0) {
           const humedadNiveles: Record<number, string> = { 20: "DRY++", 30: "DRY+", 40: "DRY", 55: "WET", 70: "WET+", 85: "WET++" };
 
-          // Build raw history
-          historyContext = `\n\nHISTORIAL RECIENTE DE COMPOSTERA #${compostera} (${last5.length} mediciones, de más reciente a más antigua):\n`;
+          const ambito = cicloId
+            ? `CICLO #${cicloId}${compostera ? ` (compostera #${compostera})` : ""}`
+            : `COMPOSTERA #${compostera}`;
+          historyContext = `\n\nHISTORIAL RECIENTE DE ${ambito} (${last5.length} mediciones, de más reciente a más antigua):\n`;
           historyContext += last5.map((m: Record<string, unknown>) => {
             const fecha = new Date(m.created_at as string).toLocaleDateString("es-MX", { day: "numeric", month: "short" });
             const humVal = Number(m.humedad);
@@ -73,7 +91,6 @@ export async function POST(req: NextRequest) {
             return `- ${fecha} (día ${m.dia ?? "?"}): Temp ${m.temperatura}°C, pH ${m.ph}, Humedad ${humLabel}${m.observaciones ? `, Obs: ${m.observaciones}` : ""} → ${m.estado}`;
           }).join("\n");
 
-          // Calculate server-side trend summary (last5 is newest-first)
           if (last5.length >= 2) {
             const temps = last5.map((m: Record<string, unknown>) => Number(m.temperatura)).reverse();
             const hums = last5.map((m: Record<string, unknown>) => Number(m.humedad)).reverse();
@@ -135,14 +152,14 @@ export async function POST(req: NextRequest) {
     const reply =
       data.choices?.[0]?.message?.content || "No pude generar respuesta.";
 
-    // Log the last user message + response to consultas
     const lastUserMsg = messages[messages.length - 1];
     if (guardar && lastUserMsg?.content) {
       try {
-        await ensureTable();
-        await insertConsulta({
+        await ensureSchemaV2();
+        await insertConsultaConCiclo({
           tipo,
           compostera,
+          ciclo_id: cicloId,
           pregunta: lastUserMsg.content,
           respuesta: reply,
         });

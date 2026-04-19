@@ -140,6 +140,19 @@ export default function Configuracion() {
 
       <main className="max-w-[480px] mx-auto px-4 py-5">
         <Link
+          href="/configuracion/sitios"
+          className="page-card flex items-center justify-between mb-3 transition-shadow hover:shadow-card-hover active:scale-[0.98]"
+        >
+          <div>
+            <div className="text-[15px] font-semibold text-verde-900">Sitios</div>
+            <div className="text-[12px] text-gray-400 leading-snug">
+              Gestionar sitios (Bojay, Tepeji...) que agrupan composteras
+            </div>
+          </div>
+          <span className="text-verde-700 text-xl leading-none">→</span>
+        </Link>
+
+        <Link
           href="/configuracion/formulaciones"
           className="page-card flex items-center justify-between mb-4 transition-shadow hover:shadow-card-hover active:scale-[0.98]"
         >
@@ -238,13 +251,22 @@ export default function Configuracion() {
                       </div>
                     </div>
 
-                    <Link
-                      href={`/configuracion/composteras/${c.id}`}
-                      className="mt-3 flex items-center justify-between text-[12px] font-medium text-verde-700 hover:text-verde-900 transition-colors"
-                    >
-                      <span>Formulaciones y detalle</span>
-                      <span className="text-base leading-none">→</span>
-                    </Link>
+                    <div className="mt-3 flex flex-col gap-1">
+                      <Link
+                        href={`/configuracion/composteras/${c.id}/ciclos`}
+                        className="flex items-center justify-between text-[12px] font-medium text-verde-700 hover:text-verde-900 transition-colors"
+                      >
+                        <span>Ciclos de esta compostera</span>
+                        <span className="text-base leading-none">→</span>
+                      </Link>
+                      <Link
+                        href={`/configuracion/composteras/${c.id}`}
+                        className="flex items-center justify-between text-[12px] font-medium text-verde-700 hover:text-verde-900 transition-colors"
+                      >
+                        <span>Formulaciones y detalle (legacy)</span>
+                        <span className="text-base leading-none">→</span>
+                      </Link>
+                    </div>
                   </div>
                 );
               })}

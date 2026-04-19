@@ -1,9 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-  ensureSchemaV2,
-  getMedicionesExport,
-  getMedicionesExportByCiclo,
-} from "@/lib/db";
+import { ensureSchemaV2, getMedicionesExportByCiclo } from "@/lib/db";
 
 function csvField(value: string): string {
   if (value.includes('"') || value.includes(",") || value.includes("\n") || value.includes("\r")) {
@@ -12,23 +8,15 @@ function csvField(value: string): string {
   return value;
 }
 
-export async function GET(req: NextRequest) {
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     await ensureSchemaV2();
-    const { searchParams } = new URL(req.url);
-    const cicloId = searchParams.get("ciclo_id");
-    const compostera = searchParams.get("compostera");
-
-    // Prioridad: ciclo_id > compostera > todo
-    let rows;
-    if (cicloId) {
-      const n = parseInt(cicloId, 10);
-      rows = Number.isInteger(n) && n > 0 ? await getMedicionesExportByCiclo(n) : [];
-    } else if (compostera) {
-      rows = await getMedicionesExport(parseInt(compostera));
-    } else {
-      rows = await getMedicionesExport();
+    const { id: idStr } = await params;
+    const id = parseInt(idStr, 10);
+    if (!Number.isInteger(id) || id <= 0) {
+      return NextResponse.json({ error: "ID inválido" }, { status: 400 });
     }
+    const rows = await getMedicionesExportByCiclo(id);
 
     const header = "ID,Compostera,Ciclo,Dia,Temperatura,pH,Humedad,Estado,Observaciones,Fecha";
     const lines = rows.map((m) => {
@@ -52,7 +40,7 @@ export async function GET(req: NextRequest) {
     return new NextResponse(csv, {
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": `attachment; filename="mediciones.csv"`,
+        "Content-Disposition": `attachment; filename="ciclo-${id}-mediciones.csv"`,
       },
     });
   } catch (e: unknown) {

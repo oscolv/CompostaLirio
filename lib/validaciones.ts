@@ -1,7 +1,7 @@
-import type { MedicionInput } from "@/lib/types";
+import type { CicloInput, MedicionInput, SitioInput } from "@/lib/types";
 
-type ValidacionResultado =
-  | { ok: true; data: MedicionInput }
+type ValidacionResultado<T> =
+  | { ok: true; data: T }
   | { ok: false; error: string };
 
 function num(v: unknown): number | null {
@@ -18,9 +18,21 @@ function entero(v: unknown): number | null {
   return n !== null && Number.isInteger(n) ? n : null;
 }
 
-// Valida el body de POST/PUT de /api/mediciones. Estricto pero tolerante
-// a strings numéricos (el cliente a veces los envía así).
-export function validarMedicionInput(body: unknown): ValidacionResultado {
+function str(v: unknown): string | null {
+  return typeof v === "string" && v.trim() !== "" ? v.trim() : null;
+}
+
+function fechaISO(v: unknown): string | null {
+  if (typeof v !== "string" || v.trim() === "") return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+  const d = new Date(v);
+  return isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+// =====================================================================
+// MEDICIÓN
+// =====================================================================
+export function validarMedicionInput(body: unknown): ValidacionResultado<MedicionInput> {
   if (!body || typeof body !== "object") {
     return { ok: false, error: "Body inválido" };
   }
@@ -29,6 +41,18 @@ export function validarMedicionInput(body: unknown): ValidacionResultado {
   const compostera = entero(b.compostera);
   if (compostera === null || compostera < 1) {
     return { ok: false, error: "Compostera inválida" };
+  }
+
+  const cicloIdRaw = b.ciclo_id;
+  let ciclo_id: number | null | undefined;
+  if (cicloIdRaw === undefined) {
+    ciclo_id = undefined;
+  } else if (cicloIdRaw === null || cicloIdRaw === "") {
+    ciclo_id = null;
+  } else {
+    const c = entero(cicloIdRaw);
+    if (c === null || c < 1) return { ok: false, error: "ciclo_id inválido" };
+    ciclo_id = c;
   }
 
   const temperatura = num(b.temperatura);
@@ -47,7 +71,9 @@ export function validarMedicionInput(body: unknown): ValidacionResultado {
   }
 
   const diaRaw = b.dia;
-  const dia = diaRaw === null || diaRaw === undefined || diaRaw === "" ? null : entero(diaRaw);
+  const dia = diaRaw === null || diaRaw === undefined || diaRaw === ""
+    ? null
+    : entero(diaRaw);
   if (diaRaw !== null && diaRaw !== undefined && diaRaw !== "" && dia === null) {
     return { ok: false, error: "Día inválido" };
   }
@@ -60,23 +86,21 @@ export function validarMedicionInput(body: unknown): ValidacionResultado {
 
   const fotoUrlRaw = b.foto_url;
   const foto_url =
-    fotoUrlRaw === undefined ? undefined : fotoUrlRaw === null ? null : typeof fotoUrlRaw === "string" ? fotoUrlRaw : null;
+    fotoUrlRaw === undefined
+      ? undefined
+      : fotoUrlRaw === null
+        ? null
+        : typeof fotoUrlRaw === "string"
+          ? fotoUrlRaw
+          : null;
 
-  const fechaRaw = b.fecha;
-  let fecha: string | null = null;
-  if (typeof fechaRaw === "string" && fechaRaw !== "") {
-    if (/^\d{4}-\d{2}-\d{2}$/.test(fechaRaw)) {
-      fecha = fechaRaw;
-    } else {
-      const d = new Date(fechaRaw);
-      if (!isNaN(d.getTime())) fecha = d.toISOString();
-    }
-  }
+  const fecha = fechaISO(b.fecha);
 
   return {
     ok: true,
     data: {
       compostera,
+      ...(ciclo_id !== undefined ? { ciclo_id } : {}),
       dia,
       temperatura,
       ph,
@@ -85,6 +109,87 @@ export function validarMedicionInput(body: unknown): ValidacionResultado {
       estado,
       ...(foto_url !== undefined ? { foto_url } : {}),
       fecha,
+    },
+  };
+}
+
+// =====================================================================
+// CICLO
+// =====================================================================
+export function validarCicloInput(body: unknown): ValidacionResultado<CicloInput> {
+  if (!body || typeof body !== "object") return { ok: false, error: "Body inválido" };
+  const b = body as Record<string, unknown>;
+
+  const compostera_id = entero(b.compostera_id);
+  if (compostera_id === null || compostera_id < 1) {
+    return { ok: false, error: "compostera_id inválido" };
+  }
+
+  const fecha_inicio_raw = typeof b.fecha_inicio === "string" ? b.fecha_inicio : "";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha_inicio_raw)) {
+    return { ok: false, error: "fecha_inicio debe ser YYYY-MM-DD" };
+  }
+
+  const nombre = str(b.nombre);
+
+  const formulacion_id_raw = b.formulacion_id;
+  let formulacion_id: number | null | undefined;
+  if (formulacion_id_raw === undefined) formulacion_id = undefined;
+  else if (formulacion_id_raw === null || formulacion_id_raw === "") formulacion_id = null;
+  else {
+    const f = entero(formulacion_id_raw);
+    if (f === null || f < 1) return { ok: false, error: "formulacion_id inválido" };
+    formulacion_id = f;
+  }
+
+  const peso_raw = b.peso_inicial_kg;
+  let peso_inicial_kg: number | null | undefined;
+  if (peso_raw === undefined) peso_inicial_kg = undefined;
+  else if (peso_raw === null || peso_raw === "") peso_inicial_kg = null;
+  else {
+    const p = num(peso_raw);
+    if (p === null || p < 0) return { ok: false, error: "peso_inicial_kg inválido" };
+    peso_inicial_kg = p;
+  }
+
+  const objetivo = str(b.objetivo);
+  const observaciones_generales = str(b.observaciones_generales);
+
+  return {
+    ok: true,
+    data: {
+      compostera_id,
+      fecha_inicio: fecha_inicio_raw,
+      nombre,
+      ...(formulacion_id !== undefined ? { formulacion_id } : {}),
+      ...(peso_inicial_kg !== undefined ? { peso_inicial_kg } : {}),
+      objetivo,
+      observaciones_generales,
+    },
+  };
+}
+
+// =====================================================================
+// SITIO
+// =====================================================================
+export function validarSitioInput(body: unknown): ValidacionResultado<SitioInput> {
+  if (!body || typeof body !== "object") return { ok: false, error: "Body inválido" };
+  const b = body as Record<string, unknown>;
+
+  const nombre = str(b.nombre);
+  if (!nombre) return { ok: false, error: "nombre es obligatorio" };
+
+  const descripcion = str(b.descripcion);
+  const ubicacion = str(b.ubicacion);
+  const activo = typeof b.activo === "boolean" ? b.activo : undefined;
+
+  return {
+    ok: true,
+    data: {
+      nombre,
+      descripcion,
+      ubicacion,
+      ...(activo !== undefined ? { activo } : {}),
     },
   };
 }

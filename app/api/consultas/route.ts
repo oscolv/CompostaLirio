@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ensureTable, getConsultas, deleteConsulta } from "@/lib/db";
+import { ensureSchemaV2, getConsultas, deleteConsulta } from "@/lib/db";
 
 export async function GET(req: NextRequest) {
   try {
-    await ensureTable();
+    await ensureSchemaV2();
     const { searchParams } = new URL(req.url);
     const tipo = searchParams.get("tipo") || undefined;
     const rows = await getConsultas(tipo);
@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
-    await ensureTable();
+    await ensureSchemaV2();
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
     if (!id) {

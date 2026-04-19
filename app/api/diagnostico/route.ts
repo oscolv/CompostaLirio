@@ -5,10 +5,9 @@ import {
   insertConsultaConCiclo,
   getMedicionesExport,
   getMedicionesExportByCiclo,
-  getCicloActivo,
-  getCicloById,
 } from "@/lib/db";
 import { buildResumenHistorico, buildResumenHistoricoPorCiclo } from "@/lib/diagnostico";
+import { resolverCiclo } from "@/lib/ciclos";
 
 type MedicionRow = {
   id: number;
@@ -67,24 +66,25 @@ export async function POST(req: NextRequest) {
   try {
     await ensureSchemaV2();
 
-    // Si no viene ciclo_id explícito, intentamos usar el ciclo activo
-    // de la compostera. Si no existe, hacemos fallback al histórico total.
-    if (!cicloId && compostera) {
-      const activo = await getCicloActivo(compostera);
-      if (activo) cicloId = activo.id as number;
-    }
+    // Resolución unificada: valida coherencia ciclo↔compostera si vienen
+    // ambos. Si solo viene compostera, toma su ciclo activo. Si tampoco
+    // hay ciclo activo, cae al histórico total de la compostera (legacy).
+    const resolved = await resolverCiclo(compostera, cicloId);
 
     let resumen: string | null = null;
     let composteraEfectiva: number | null = compostera;
-    if (cicloId) {
-      const ciclo = await getCicloById(cicloId);
-      if (!ciclo) {
-        return NextResponse.json({ error: `Ciclo #${cicloId} no encontrado.` }, { status: 404 });
-      }
-      composteraEfectiva = ciclo.compostera_id as number;
+    if (resolved.ok) {
+      cicloId = resolved.ciclo.id;
+      composteraEfectiva = resolved.ciclo.compostera_id;
       resumen = await buildResumenHistoricoPorCiclo(cicloId);
-    } else if (compostera) {
+    } else if (resolved.err.code === "NO_ACTIVE_CYCLE" && compostera) {
+      // Sin ciclo activo: se conserva el comportamiento legacy de diagnosticar
+      // el histórico completo de la compostera. `buildResumenHistorico`
+      // internamente vuelve a intentar el ciclo activo y solo procesa el
+      // histórico total si realmente no existe ninguno.
       resumen = await buildResumenHistorico(compostera);
+    } else {
+      return NextResponse.json({ error: resolved.err.error }, { status: resolved.err.status });
     }
 
     if (!resumen) {

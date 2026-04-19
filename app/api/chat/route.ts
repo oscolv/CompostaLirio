@@ -5,8 +5,8 @@ import {
   insertConsultaConCiclo,
   getMediciones,
   getMedicionesByCiclo,
-  getCicloActivo,
 } from "@/lib/db";
+import { resolverCiclo } from "@/lib/ciclos";
 
 // Rate limiting: 30 requests per hour per IP
 const RATE_LIMIT = 30;
@@ -67,10 +67,14 @@ export async function POST(req: NextRequest) {
       try {
         await ensureSchemaV2();
 
-        // Resolver ciclo efectivo
-        if (!cicloId && compostera) {
-          const activo = await getCicloActivo(compostera);
-          if (activo) cicloId = activo.id as number;
+        // Resolución unificada: valida coherencia ciclo↔compostera.
+        // Si no hay ciclo activo, cae a historial global de la compostera
+        // (legacy, útil solo en composteras sin ciclo todavía).
+        const resolved = await resolverCiclo(compostera, cicloId);
+        if (resolved.ok) {
+          cicloId = resolved.ciclo.id;
+        } else if (resolved.err.code === "MISMATCH" || resolved.err.code === "NOT_FOUND") {
+          return NextResponse.json({ error: resolved.err.error }, { status: resolved.err.status });
         }
 
         const recent = cicloId

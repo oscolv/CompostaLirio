@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import NextImage from "next/image";
+import { useSitios } from "@/hooks/useSitios";
 
 type Compostera = {
   id: number;
@@ -10,6 +11,7 @@ type Compostera = {
   fecha_inicio: string;
   activa: boolean;
   masa_inicial: string;
+  sitio_id: number | null;
 };
 
 function defaultComposteras(): Compostera[] {
@@ -19,6 +21,7 @@ function defaultComposteras(): Compostera[] {
     fecha_inicio: "",
     activa: true,
     masa_inicial: "",
+    sitio_id: null,
   }));
 }
 
@@ -51,11 +54,12 @@ export default function Configuracion() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [mensaje, setMensaje] = useState("");
+  const { activos: sitiosActivos } = useSitios();
 
   useEffect(() => {
     fetch("/api/composteras")
       .then((r) => r.json())
-      .then((rows: Array<{ id: number; nombre: string | null; fecha_inicio: string | null; activa: boolean; masa_inicial: number | null }>) => {
+      .then((rows: Array<{ id: number; nombre: string | null; fecha_inicio: string | null; activa: boolean; masa_inicial: number | null; sitio_id: number | null }>) => {
         if (Array.isArray(rows) && rows.length > 0) {
           const merged = defaultComposteras().map((def) => {
             const saved = rows.find((r) => r.id === def.id);
@@ -66,6 +70,7 @@ export default function Configuracion() {
                   fecha_inicio: saved.fecha_inicio ? saved.fecha_inicio.split("T")[0] : "",
                   activa: saved.activa,
                   masa_inicial: saved.masa_inicial != null ? String(saved.masa_inicial) : "",
+                  sitio_id: saved.sitio_id ?? null,
                 }
               : def;
           });
@@ -76,7 +81,7 @@ export default function Configuracion() {
       .finally(() => setLoading(false));
   }, []);
 
-  function update(id: number, field: keyof Compostera, value: string | boolean) {
+  function update(id: number, field: keyof Compostera, value: string | boolean | number | null) {
     setComposteras((prev) => prev.map((c) => (c.id === id ? { ...c, [field]: value } : c)));
   }
 
@@ -92,6 +97,7 @@ export default function Configuracion() {
           fecha_inicio: c.fecha_inicio || null,
           activa: c.activa,
           masa_inicial: masa != null && !Number.isNaN(masa) ? masa : null,
+          sitio_id: c.sitio_id,
         };
       });
       const res = await fetch("/api/composteras", {
@@ -248,6 +254,26 @@ export default function Configuracion() {
                           onChange={(e) => update(c.id, "masa_inicial", e.target.value)}
                           className="w-full px-2.5 py-2 border border-verde-200/50 rounded-lg text-[13px] bg-white outline-none focus:border-verde-400 transition-colors"
                         />
+                      </div>
+                      <div className="col-span-2">
+                        <label className="text-[10px] font-semibold text-verde-700/50 uppercase tracking-wider block mb-1">
+                          Sitio
+                        </label>
+                        <select
+                          value={c.sitio_id ?? ""}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            update(c.id, "sitio_id", v === "" ? null : Number(v));
+                          }}
+                          className="w-full px-2.5 py-2 border border-verde-200/50 rounded-lg text-[13px] bg-white outline-none focus:border-verde-400 transition-colors"
+                        >
+                          <option value="">— Sin asignar —</option>
+                          {sitiosActivos.map((s) => (
+                            <option key={s.id} value={s.id}>
+                              {s.nombre}
+                            </option>
+                          ))}
+                        </select>
                       </div>
                     </div>
 

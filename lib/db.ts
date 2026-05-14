@@ -203,6 +203,23 @@ async function runEnsureSchemaV2() {
   // 5) consultas.ciclo_id
   await sql`ALTER TABLE consultas ADD COLUMN IF NOT EXISTS ciclo_id INTEGER REFERENCES ciclos(id) ON DELETE SET NULL`;
 
+  // 6) bitácoras por sitio (cuaderno de campo libre, no ligado a compostera)
+  await sql`
+    CREATE TABLE IF NOT EXISTS bitacoras (
+      id            SERIAL PRIMARY KEY,
+      sitio_id      INTEGER NOT NULL REFERENCES sitios(id) ON DELETE RESTRICT,
+      fecha         DATE NOT NULL,
+      hora          TIME NOT NULL,
+      observaciones TEXT NOT NULL,
+      fotos         JSONB NOT NULL DEFAULT '[]'::jsonb,
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS bitacoras_sitio_fecha_idx
+      ON bitacoras (sitio_id, fecha DESC, hora DESC)
+  `;
+
   // ---------------------------------------------------------------
   // BACKFILL (sólo ejecuta lo que falte; seguro en re-ejecución)
   // ---------------------------------------------------------------
@@ -1025,6 +1042,32 @@ export async function discardCiclo(id: number) {
     RETURNING *
   `;
   return rows[0] || null;
+}
+
+/* ============================================================
+ * BITÁCORAS (cuaderno de campo por sitio)
+ * ============================================================ */
+
+export async function insertBitacora(data: {
+  sitio_id: number;
+  fecha: string;       // YYYY-MM-DD
+  hora: string;        // HH:MM o HH:MM:SS
+  observaciones: string;
+  fotos: string[];     // URLs de Vercel Blob
+}) {
+  const sql = getSQL();
+  const rows = await sql`
+    INSERT INTO bitacoras (sitio_id, fecha, hora, observaciones, fotos)
+    VALUES (
+      ${data.sitio_id},
+      ${data.fecha}::date,
+      ${data.hora}::time,
+      ${data.observaciones},
+      ${JSON.stringify(data.fotos)}::jsonb
+    )
+    RETURNING id, created_at
+  `;
+  return rows[0] as { id: number; created_at: string };
 }
 
 /* ============================================================

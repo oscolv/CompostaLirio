@@ -16,6 +16,7 @@ import {
   IconLeaf,
   IconChart,
   IconCamera,
+  IconBook,
 } from "@/components/ui/icons";
 import { FotoModal } from "@/components/ui/FotoModal";
 import { AnalisisBadge } from "@/components/ui/AnalisisBadge";
@@ -427,6 +428,23 @@ export default function Home() {
                 </div>
               </div>
             </button>
+
+            <Link
+              href="/bitacora"
+              className="page-card flex items-start gap-4 text-left transition-shadow duration-200 hover:shadow-card-hover active:scale-[0.98]"
+            >
+              <div className="mt-0.5 flex-shrink-0 w-10 h-10 rounded-xl bg-tierra-400/10 text-tierra-600 flex items-center justify-center">
+                <IconBook />
+              </div>
+              <div>
+                <div className="text-[15px] font-semibold text-gray-800 mb-0.5">
+                  Bit&aacute;cora
+                </div>
+                <div className="text-[13px] text-gray-400 leading-snug">
+                  Anotar incidencias y fotos del sitio
+                </div>
+              </div>
+            </Link>
           </div>
         )}
 

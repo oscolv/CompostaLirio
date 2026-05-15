@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import NextImage from "next/image";
+import Markdown from "react-markdown";
 import { IconArrowLeft, IconCamera, IconBook } from "@/components/ui/icons";
 import { FotoModal } from "@/components/ui/FotoModal";
 import { useFotoModal } from "@/hooks/useFotoModal";
@@ -255,9 +256,15 @@ export default function BitacoraHistorial() {
                           )}
                         </div>
                       </div>
-                      <p className={`text-[13px] text-gray-700 leading-snug ${isOpen ? "" : "line-clamp-2"}`}>
-                        {b.observaciones}
-                      </p>
+                      {isOpen ? (
+                        <div className="text-[13px] text-gray-700 leading-snug prose-chat">
+                          <Markdown>{b.observaciones}</Markdown>
+                        </div>
+                      ) : (
+                        <p className="text-[13px] text-gray-700 leading-snug line-clamp-2">
+                          {b.observaciones}
+                        </p>
+                      )}
                     </button>
 
                     {isOpen && nFotos > 0 && (

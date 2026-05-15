@@ -284,6 +284,49 @@ export function validarBitacoraInput(body: unknown): ValidacionResultado<Bitacor
   };
 }
 
+export type BitacoraUpdateInput = {
+  fecha: string;
+  hora: string;
+  observaciones: string;
+  fotos: string[];
+};
+
+// Para edición: el sitio_id no se cambia (no permitimos mover bitácoras
+// entre sitios). El resto comparte reglas con la creación.
+export function validarBitacoraUpdate(body: unknown): ValidacionResultado<BitacoraUpdateInput> {
+  if (!body || typeof body !== "object") return { ok: false, error: "Body inválido" };
+  const b = body as Record<string, unknown>;
+
+  const fecha = typeof b.fecha === "string" ? b.fecha : "";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+    return { ok: false, error: "fecha debe ser YYYY-MM-DD" };
+  }
+
+  const hora = typeof b.hora === "string" ? b.hora : "";
+  if (!/^\d{2}:\d{2}(:\d{2})?$/.test(hora)) {
+    return { ok: false, error: "hora debe ser HH:MM" };
+  }
+
+  const observacionesRaw = typeof b.observaciones === "string" ? b.observaciones.trim() : "";
+  if (!observacionesRaw) return { ok: false, error: "Las observaciones son obligatorias" };
+  if (observacionesRaw.length > 2000) {
+    return { ok: false, error: "Las observaciones no pueden exceder 2000 caracteres" };
+  }
+
+  if (!Array.isArray(b.fotos)) return { ok: false, error: "fotos debe ser un arreglo" };
+  if (b.fotos.length > 10) return { ok: false, error: "Máximo 10 fotos por bitácora" };
+  for (const url of b.fotos) {
+    if (typeof url !== "string" || !url.startsWith("https://")) {
+      return { ok: false, error: "URLs de fotos inválidas" };
+    }
+  }
+
+  return {
+    ok: true,
+    data: { fecha, hora, observaciones: observacionesRaw, fotos: b.fotos as string[] },
+  };
+}
+
 // =====================================================================
 // SITIO
 // =====================================================================

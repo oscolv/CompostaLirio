@@ -25,6 +25,7 @@ app/
   providers.tsx            Monta el contexto global de sitio
   page.tsx                 Captura de medición + chat + diagnóstico
   bitacora/page.tsx        Cuaderno de campo por sitio (fecha, hora, observaciones, fotos)
+  bitacora/historial/page.tsx  Listado de entradas del sitio activo; expandir, editar inline, borrar
   historial/page.tsx       Listado, edición y CSV (filtros sitio/compostera/ciclo)
   consultas/page.tsx       Historial de preguntas
   configuracion/           Composteras, sitios, ciclos, formulaciones
@@ -135,6 +136,8 @@ middleware.ts              Gate por PIN con cookie access_pin
 | Método | Ruta | Descripción |
 |---|---|---|
 | `POST` | `/api/bitacoras` | Crear entrada de bitácora (`sitio_id`, `fecha`, `hora`, `observaciones`, `fotos[]`). Hasta 10 fotos por entrada, guardadas como JSONB de URLs de Blob |
+| `GET`  | `/api/bitacoras?sitio_id=N` | Listar últimas 100 del sitio (orden por fecha+hora desc) |
+| `GET/PUT/DELETE` | `/api/bitacoras/[id]` | Detalle / actualizar (fecha, hora, observaciones, fotos) / borrar. PUT y DELETE limpian del Blob las fotos retiradas |
 
 ## Variables de entorno
 

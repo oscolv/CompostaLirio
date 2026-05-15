@@ -303,6 +303,15 @@ export default function Bitacora() {
             </div>
           )}
         </div>
+
+        <div className="mt-4 text-center">
+          <Link
+            href="/bitacora/historial"
+            className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-verde-700 hover:text-verde-900 transition-colors"
+          >
+            Ver entradas anteriores &rarr;
+          </Link>
+        </div>
       </main>
     </div>
   );

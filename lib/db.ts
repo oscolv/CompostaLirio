@@ -1070,6 +1070,54 @@ export async function insertBitacora(data: {
   return rows[0] as { id: number; created_at: string };
 }
 
+export async function getBitacorasBySitio(sitio_id: number, limit = 100) {
+  const sql = getSQL();
+  return sql`
+    SELECT id, sitio_id, fecha, hora, observaciones, fotos, created_at
+    FROM bitacoras
+    WHERE sitio_id = ${sitio_id}
+    ORDER BY fecha DESC, hora DESC, id DESC
+    LIMIT ${limit}
+  `;
+}
+
+export async function getBitacoraById(id: number) {
+  const sql = getSQL();
+  const rows = await sql`
+    SELECT id, sitio_id, fecha, hora, observaciones, fotos, created_at
+    FROM bitacoras
+    WHERE id = ${id}
+  `;
+  return rows[0] || null;
+}
+
+export async function updateBitacora(
+  id: number,
+  data: {
+    fecha: string;
+    hora: string;
+    observaciones: string;
+    fotos: string[];
+  },
+) {
+  const sql = getSQL();
+  const rows = await sql`
+    UPDATE bitacoras SET
+      fecha         = ${data.fecha}::date,
+      hora          = ${data.hora}::time,
+      observaciones = ${data.observaciones},
+      fotos         = ${JSON.stringify(data.fotos)}::jsonb
+    WHERE id = ${id}
+    RETURNING id, sitio_id, fecha, hora, observaciones, fotos, created_at
+  `;
+  return rows[0] || null;
+}
+
+export async function deleteBitacora(id: number) {
+  const sql = getSQL();
+  await sql`DELETE FROM bitacoras WHERE id = ${id}`;
+}
+
 /* ============================================================
  * MEDICIONES POR CICLO
  * ============================================================ */

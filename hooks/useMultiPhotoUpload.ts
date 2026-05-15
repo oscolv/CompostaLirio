@@ -24,17 +24,22 @@ export function useMultiPhotoUpload(max = 10) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [items, setItems] = useState<MultiPhotoItem[]>([]);
 
+  // Mantiene un puntero siempre fresco al state. waitForUploads() corre
+  // async dentro de un closure y, sin esto, leería un snapshot viejo
+  // de items (sin los url recién poblados por uploadOne).
+  const itemsRef = useRef<MultiPhotoItem[]>([]);
+  useEffect(() => { itemsRef.current = items; }, [items]);
+
   // Cola serializada: cada nuevo item se encadena al final.
   const queueRef = useRef<Promise<void>>(Promise.resolve());
 
   // Liberar object URLs al desmontar.
   useEffect(() => {
     return () => {
-      for (const it of items) {
+      for (const it of itemsRef.current) {
         if (it.preview) URL.revokeObjectURL(it.preview);
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const open = useCallback(() => inputRef.current?.click(), []);
@@ -101,11 +106,11 @@ export function useMultiPhotoUpload(max = 10) {
 
   const retry = useCallback(
     (id: string) => {
-      const item = items.find((it) => it.id === id);
+      const item = itemsRef.current.find((it) => it.id === id);
       if (!item || item.uploading || item.url) return;
       enqueue(item);
     },
-    [items, enqueue],
+    [enqueue],
   );
 
   const clear = useCallback(() => {
@@ -119,10 +124,11 @@ export function useMultiPhotoUpload(max = 10) {
   }, []);
 
   // Espera a que termine la cola actual y devuelve las URLs.
-  // Si alguna foto quedó en error, lanza para que el caller no guarde.
+  // Lee itemsRef (no items del closure) para evitar snapshots stale: el
+  // último uploadOne puede haber actualizado state justo antes del await.
   const waitForUploads = useCallback(async (): Promise<string[]> => {
     await queueRef.current;
-    const snapshot = items;
+    const snapshot = itemsRef.current;
     const conError = snapshot.filter((it) => it.error);
     if (conError.length > 0) {
       throw new Error(
@@ -134,7 +140,7 @@ export function useMultiPhotoUpload(max = 10) {
       throw new Error("Aún hay fotos sin subir. Espera a que terminen.");
     }
     return snapshot.map((it) => it.url!);
-  }, [items]);
+  }, []);
 
   const pendingCount = items.filter((it) => it.uploading).length;
   const failedCount = items.filter((it) => it.error).length;

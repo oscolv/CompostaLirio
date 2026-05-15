@@ -22,7 +22,12 @@ export default function Bitacora() {
 
   const mostrarSelectorSitio = sitiosActivos.length > 1;
   const obsTrim = obs.trim();
-  const canSubmit = !!sitioId && !!obsTrim && !saving && !photos.uploading;
+  const canSubmit =
+    !!sitioId &&
+    !!obsTrim &&
+    !saving &&
+    !photos.busy &&
+    photos.failedCount === 0;
 
   function resetForm() {
     setFecha(hoyISO());
@@ -45,7 +50,7 @@ export default function Bitacora() {
     setSaving(true);
     setError("");
     try {
-      const urls = await photos.uploadAll();
+      const urls = await photos.waitForUploads();
       const res = await fetch("/api/bitacoras", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -165,7 +170,20 @@ export default function Bitacora() {
           </div>
 
           <div className="mb-5">
-            <label className="input-label">Fotos (hasta {MAX_FOTOS})</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="input-label mb-0">Fotos (hasta {MAX_FOTOS})</label>
+              {photos.count > 0 && (
+                <div className="text-[11px] font-semibold text-gray-500">
+                  {photos.readyCount}/{photos.count} listas
+                  {photos.pendingCount > 0 && (
+                    <span className="text-verde-700"> · {photos.pendingCount} subiendo</span>
+                  )}
+                  {photos.failedCount > 0 && (
+                    <span className="text-red-600"> · {photos.failedCount} con error</span>
+                  )}
+                </div>
+              )}
+            </div>
             <input
               ref={photos.inputRef}
               type="file"
@@ -179,7 +197,7 @@ export default function Bitacora() {
             {photos.items.length > 0 && (
               <div className="grid grid-cols-3 gap-2 mb-2">
                 {photos.items.map((it) => (
-                  <div key={it.id} className="relative aspect-square">
+                  <div key={it.id} className="relative aspect-square animate-fade-in">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={it.preview}
@@ -189,21 +207,46 @@ export default function Bitacora() {
                     <button
                       type="button"
                       onClick={() => photos.remove(it.id)}
-                      disabled={saving || photos.uploading}
-                      className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/55 text-white flex items-center justify-center text-[12px] font-bold hover:bg-black/75 disabled:opacity-50"
+                      disabled={saving}
+                      className="absolute top-1 right-1 w-7 h-7 rounded-full bg-black/55 text-white flex items-center justify-center text-[14px] font-bold hover:bg-black/75 active:scale-90 disabled:opacity-50"
                       aria-label="Quitar foto"
                     >
                       &times;
                     </button>
+
                     {it.uploading && (
-                      <div className="absolute inset-0 bg-white/60 rounded-xl flex items-center justify-center">
-                        <span className="text-[11px] font-semibold text-verde-700 animate-pulse-fade">Subiendo...</span>
+                      <div className="absolute inset-0 bg-black/40 rounded-xl flex flex-col items-center justify-center gap-1">
+                        <svg className="w-6 h-6 animate-spin text-white" viewBox="0 0 24 24" fill="none">
+                          <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeOpacity="0.25" />
+                          <path d="M22 12a10 10 0 0 0-10-10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+                        </svg>
+                        <span className="text-[10px] font-semibold text-white">Subiendo</span>
                       </div>
                     )}
-                    {it.error && (
-                      <div className="absolute inset-0 bg-red-500/70 rounded-xl flex items-center justify-center px-1 text-center">
-                        <span className="text-[11px] font-semibold text-white">{it.error}</span>
+
+                    {!it.uploading && it.url && (
+                      <div className="absolute bottom-1 left-1 w-6 h-6 rounded-full bg-verde-600 text-white flex items-center justify-center shadow-card">
+                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
                       </div>
+                    )}
+
+                    {!it.uploading && it.error && (
+                      <button
+                        type="button"
+                        onClick={() => photos.retry(it.id)}
+                        disabled={saving}
+                        className="absolute inset-0 bg-red-600/80 rounded-xl flex flex-col items-center justify-center gap-1 px-1 text-center hover:bg-red-700/85 active:scale-[0.97] disabled:opacity-60"
+                        aria-label="Reintentar subida"
+                      >
+                        <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v6h6M20 20v-6h-6M5 19a9 9 0 0014.65-3M19 5A9 9 0 004.35 8" />
+                        </svg>
+                        <span className="text-[10px] font-semibold text-white leading-tight">
+                          Reintentar
+                        </span>
+                      </button>
                     )}
                   </div>
                 ))}
@@ -214,7 +257,7 @@ export default function Bitacora() {
               <button
                 type="button"
                 onClick={photos.open}
-                disabled={saving || photos.uploading}
+                disabled={saving}
                 className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 border-dashed border-verde-200 text-verde-600 text-[13px] font-semibold transition-colors hover:border-verde-400 hover:bg-verde-50/50 active:scale-[0.98] disabled:opacity-50"
               >
                 <IconCamera />
@@ -242,10 +285,12 @@ export default function Bitacora() {
               className="btn-primary"
             >
               {saving
-                ? photos.uploading
-                  ? "Subiendo fotos..."
-                  : "Guardando..."
-                : "Guardar bitácora"}
+                ? "Guardando..."
+                : photos.busy
+                  ? `Esperando ${photos.pendingCount} foto(s)...`
+                  : photos.failedCount > 0
+                    ? "Reintenta las fotos con error"
+                    : "Guardar bitácora"}
             </button>
           ) : (
             <div className="flex flex-col gap-2 animate-fade-in">

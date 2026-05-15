@@ -22,6 +22,8 @@ type Bitacora = {
 };
 
 const MAX_FOTOS = 10;
+// Mismo nivel de compresión que la captura (no requiere análisis IA).
+const COMPRESS_BITACORA = { maxWidth: 900, quality: 0.55 };
 
 function normalizarFecha(f: string): string {
   // La columna DATE puede venir como "YYYY-MM-DD" o ISO completo.
@@ -48,7 +50,7 @@ export default function BitacoraHistorial() {
   const [editHora, setEditHora] = useState("");
   const [editObs, setEditObs] = useState("");
   const [editFotosExistentes, setEditFotosExistentes] = useState<string[]>([]);
-  const editPhotos = useMultiPhotoUpload(MAX_FOTOS);
+  const editPhotos = useMultiPhotoUpload(MAX_FOTOS, COMPRESS_BITACORA);
   const fotoModal = useFotoModal();
 
   const mostrarSelectorSitio = sitiosActivos.length > 1;

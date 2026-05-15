@@ -20,8 +20,15 @@ export function compressImage(file: File, maxWidth = 1200, quality = 0.7): Promi
   });
 }
 
-export async function uploadFoto(file: File): Promise<string> {
-  const compressed = await compressImage(file);
+export async function uploadFoto(
+  file: File,
+  compressOpts?: { maxWidth?: number; quality?: number },
+): Promise<string> {
+  const compressed = await compressImage(
+    file,
+    compressOpts?.maxWidth ?? 1200,
+    compressOpts?.quality ?? 0.7,
+  );
   const formData = new FormData();
   formData.append("foto", compressed);
   const res = await fetch("/api/upload", { method: "POST", body: formData });

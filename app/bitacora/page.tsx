@@ -9,6 +9,9 @@ import { useSitio } from "@/lib/sitio-context";
 import { useMultiPhotoUpload } from "@/hooks/useMultiPhotoUpload";
 
 const MAX_FOTOS = 10;
+// Bitácora es registro visual humano (no pasa por análisis IA), así que
+// se comprime más agresivo que la foto de medición (1200/0.7).
+const COMPRESS_BITACORA = { maxWidth: 900, quality: 0.55 };
 
 export default function Bitacora() {
   const { activos: sitiosActivos, sitioId, setSitioId, loading: loadingSitios } = useSitio();
@@ -18,7 +21,7 @@ export default function Bitacora() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [guardada, setGuardada] = useState(false);
-  const photos = useMultiPhotoUpload(MAX_FOTOS);
+  const photos = useMultiPhotoUpload(MAX_FOTOS, COMPRESS_BITACORA);
 
   const mostrarSelectorSitio = sitiosActivos.length > 1;
   const obsTrim = obs.trim();

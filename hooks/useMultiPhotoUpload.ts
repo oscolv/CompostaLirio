@@ -25,7 +25,10 @@ function nextId() {
 // con cada cambio. setItems solo refleja el ref en el render. Evita un
 // bug de timing donde, después de await, React no había aplicado el
 // re-render ni el useEffect que sincronizaba el ref con el state.
-export function useMultiPhotoUpload(max = 10) {
+export function useMultiPhotoUpload(
+  max = 10,
+  compressOpts?: { maxWidth?: number; quality?: number },
+) {
   const inputRef = useRef<HTMLInputElement>(null);
   const itemsRef = useRef<MultiPhotoItem[]>([]);
   const [items, setItemsState] = useState<MultiPhotoItem[]>([]);
@@ -59,13 +62,18 @@ export function useMultiPhotoUpload(max = 10) {
 
   const open = useCallback(() => inputRef.current?.click(), []);
 
+  // Mantén compressOpts en un ref para no recrear uploadOne en cada render
+  // (callers suelen pasar objeto inline, pero los valores son estables).
+  const compressOptsRef = useRef(compressOpts);
+  useEffect(() => { compressOptsRef.current = compressOpts; }, [compressOpts]);
+
   // Sube un item y actualiza su estado. No relanza: el error se guarda
   // en el ref/state para que la UI lo muestre con botón "Reintentar".
   const uploadOne = useCallback(
     async (item: MultiPhotoItem) => {
       patchItem(item.id, { uploading: true, error: undefined });
       try {
-        const url = await uploadFoto(item.file);
+        const url = await uploadFoto(item.file, compressOptsRef.current);
         patchItem(item.id, { uploading: false, url });
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : "Error al subir";

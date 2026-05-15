@@ -18,20 +18,35 @@ function nextId() {
 
 // Sube fotos de forma progresiva en serie a medida que se seleccionan.
 // El usuario ve el progreso de cada foto (subiendo → ✓ / error con reintento).
-// "Guardar bitácora" solo espera a que termine la cola; el INSERT a BD es
-// inmediato porque las URLs ya están listas.
+// "Guardar" solo espera a que termine la cola; el INSERT a BD es inmediato
+// porque las URLs ya están listas.
+//
+// Diseño: itemsRef es la fuente autoritativa, actualizada síncronamente
+// con cada cambio. setItems solo refleja el ref en el render. Evita un
+// bug de timing donde, después de await, React no había aplicado el
+// re-render ni el useEffect que sincronizaba el ref con el state.
 export function useMultiPhotoUpload(max = 10) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const [items, setItems] = useState<MultiPhotoItem[]>([]);
-
-  // Mantiene un puntero siempre fresco al state. waitForUploads() corre
-  // async dentro de un closure y, sin esto, leería un snapshot viejo
-  // de items (sin los url recién poblados por uploadOne).
   const itemsRef = useRef<MultiPhotoItem[]>([]);
-  useEffect(() => { itemsRef.current = items; }, [items]);
+  const [items, setItemsState] = useState<MultiPhotoItem[]>([]);
 
   // Cola serializada: cada nuevo item se encadena al final.
   const queueRef = useRef<Promise<void>>(Promise.resolve());
+
+  // Actualizador atómico: muta el ref y refleja al state en una sola operación.
+  const setItems = useCallback((next: MultiPhotoItem[]) => {
+    itemsRef.current = next;
+    setItemsState(next);
+  }, []);
+
+  const patchItem = useCallback(
+    (id: string, patch: Partial<MultiPhotoItem>) => {
+      const next = itemsRef.current.map((p) => (p.id === id ? { ...p, ...patch } : p));
+      itemsRef.current = next;
+      setItemsState(next);
+    },
+    [],
+  );
 
   // Liberar object URLs al desmontar.
   useEffect(() => {
@@ -45,23 +60,20 @@ export function useMultiPhotoUpload(max = 10) {
   const open = useCallback(() => inputRef.current?.click(), []);
 
   // Sube un item y actualiza su estado. No relanza: el error se guarda
-  // en el state para que la UI lo muestre con botón "Reintentar".
-  const uploadOne = useCallback(async (item: MultiPhotoItem) => {
-    setItems((prev) =>
-      prev.map((p) => (p.id === item.id ? { ...p, uploading: true, error: undefined } : p)),
-    );
-    try {
-      const url = await uploadFoto(item.file);
-      setItems((prev) =>
-        prev.map((p) => (p.id === item.id ? { ...p, uploading: false, url } : p)),
-      );
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Error al subir";
-      setItems((prev) =>
-        prev.map((p) => (p.id === item.id ? { ...p, uploading: false, error: msg } : p)),
-      );
-    }
-  }, []);
+  // en el ref/state para que la UI lo muestre con botón "Reintentar".
+  const uploadOne = useCallback(
+    async (item: MultiPhotoItem) => {
+      patchItem(item.id, { uploading: true, error: undefined });
+      try {
+        const url = await uploadFoto(item.file);
+        patchItem(item.id, { uploading: false, url });
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : "Error al subir";
+        patchItem(item.id, { uploading: false, error: msg });
+      }
+    },
+    [patchItem],
+  );
 
   // Encola un item al final de la cola serializada.
   const enqueue = useCallback(
@@ -75,34 +87,29 @@ export function useMultiPhotoUpload(max = 10) {
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const files = e.target.files;
       if (!files || files.length === 0) return;
-      const nuevos: MultiPhotoItem[] = [];
-      setItems((prev) => {
-        const slots = Math.max(0, max - prev.length);
-        const seleccionados = Array.from(files).slice(0, slots);
-        for (const file of seleccionados) {
-          nuevos.push({
-            id: nextId(),
-            file,
-            preview: URL.createObjectURL(file),
-            uploading: false,
-          });
-        }
-        return [...prev, ...nuevos];
-      });
+      const slots = Math.max(0, max - itemsRef.current.length);
+      const seleccionados = Array.from(files).slice(0, slots);
+      const nuevos: MultiPhotoItem[] = seleccionados.map((file) => ({
+        id: nextId(),
+        file,
+        preview: URL.createObjectURL(file),
+        uploading: false,
+      }));
+      setItems([...itemsRef.current, ...nuevos]);
       if (inputRef.current) inputRef.current.value = "";
-      // Dispara la subida automática de cada nuevo item.
       for (const item of nuevos) enqueue(item);
     },
-    [max, enqueue],
+    [max, enqueue, setItems],
   );
 
-  const remove = useCallback((id: string) => {
-    setItems((prev) => {
-      const target = prev.find((it) => it.id === id);
+  const remove = useCallback(
+    (id: string) => {
+      const target = itemsRef.current.find((it) => it.id === id);
       if (target?.preview) URL.revokeObjectURL(target.preview);
-      return prev.filter((it) => it.id !== id);
-    });
-  }, []);
+      setItems(itemsRef.current.filter((it) => it.id !== id));
+    },
+    [setItems],
+  );
 
   const retry = useCallback(
     (id: string) => {
@@ -114,18 +121,15 @@ export function useMultiPhotoUpload(max = 10) {
   );
 
   const clear = useCallback(() => {
-    setItems((prev) => {
-      for (const it of prev) {
-        if (it.preview) URL.revokeObjectURL(it.preview);
-      }
-      return [];
-    });
+    for (const it of itemsRef.current) {
+      if (it.preview) URL.revokeObjectURL(it.preview);
+    }
+    setItems([]);
     if (inputRef.current) inputRef.current.value = "";
-  }, []);
+  }, [setItems]);
 
-  // Espera a que termine la cola actual y devuelve las URLs.
-  // Lee itemsRef (no items del closure) para evitar snapshots stale: el
-  // último uploadOne puede haber actualizado state justo antes del await.
+  // Espera a que termine la cola y devuelve las URLs leyendo itemsRef
+  // directamente (no del state, que podría no estar aplicado todavía).
   const waitForUploads = useCallback(async (): Promise<string[]> => {
     await queueRef.current;
     const snapshot = itemsRef.current;

@@ -4,7 +4,8 @@ App de monitoreo y diagnóstico de compostaje de lirio acuático para la
 comunidad de San Francisco Bojay (Hidalgo). Captura mediciones de
 temperatura, pH y humedad, analiza fotos con IA, guarda historial
 agrupado por **sitio → compostera → ciclo** y da diagnóstico integral
-con un agente conversacional.
+con un agente conversacional. Incluye además una **bitácora** libre
+por sitio (incidencias, clima, fauna) con hasta 10 fotos por entrada.
 
 ## Stack
 
@@ -23,6 +24,7 @@ app/
   layout.tsx               Envuelve el árbol con <Providers> (SitioProvider)
   providers.tsx            Monta el contexto global de sitio
   page.tsx                 Captura de medición + chat + diagnóstico
+  bitacora/page.tsx        Cuaderno de campo por sitio (fecha, hora, observaciones, fotos)
   historial/page.tsx       Listado, edición y CSV (filtros sitio/compostera/ciclo)
   consultas/page.tsx       Historial de preguntas
   configuracion/           Composteras, sitios, ciclos, formulaciones
@@ -46,6 +48,7 @@ app/
     analizar/              Análisis de foto (IA de visión)
     chat/                  Conversación con el agente
     diagnostico/           Diagnóstico histórico (por ciclo o compostera)
+    bitacoras/             POST de bitácora por sitio (fotos en columna JSONB)
     upload/                Subida de foto al Blob
     auth/                  Login/logout (PIN)
 
@@ -73,7 +76,8 @@ components/
   ui/AnalisisBadge.tsx     Badge verde/amarillo/rojo del análisis
 
 hooks/
-  usePhotoUpload.ts        Selección, preview y subida de foto
+  usePhotoUpload.ts        Selección, preview y subida de foto (1 archivo)
+  useMultiPhotoUpload.ts   Selección y subida en serie de hasta N fotos (bitácora)
   useImageAnalysis.ts      Estado del análisis IA
   useFotoModal.ts          Estado del modal de foto
   useComposteras.ts        Fetch de composteras (opcionalmente filtrado por sitio)
@@ -125,6 +129,12 @@ middleware.ts              Gate por PIN con cookie access_pin
 | `POST` | `/api/diagnostico` | Diagnóstico histórico. Acepta `ciclo_id` o `compostera`; prefiere ciclo |
 | `POST` | `/api/upload` | FormData con `foto` — sube a Vercel Blob |
 | `POST` | `/api/auth` / `/api/auth/logout` | Login / logout con PIN |
+
+### Bitácora
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| `POST` | `/api/bitacoras` | Crear entrada de bitácora (`sitio_id`, `fecha`, `hora`, `observaciones`, `fotos[]`). Hasta 10 fotos por entrada, guardadas como JSONB de URLs de Blob |
 
 ## Variables de entorno
 
@@ -188,6 +198,12 @@ sitios (1)
 - `mediciones` — lectura puntual. `ciclo_id` se resuelve al crear la
   medición: el endpoint `POST /api/mediciones` usa el ciclo activo de la
   compostera si el cliente no manda uno explícito.
+- `bitacoras` — cuaderno de campo libre **por sitio**, fuera de la
+  jerarquía de composteras/ciclos. Cada entrada tiene `sitio_id` (FK
+  con `ON DELETE RESTRICT`), `fecha`, `hora`, `observaciones` (texto
+  libre, máx. 2000 chars) y `fotos` como columna `JSONB` con el array
+  de URLs de Vercel Blob (máx. 10 por entrada). Índice
+  `(sitio_id, fecha DESC, hora DESC)` para listados futuros.
 
 ### Resolución centralizada del ciclo
 
